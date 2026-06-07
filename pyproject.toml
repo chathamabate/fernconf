@@ -14,6 +14,10 @@ classifiers = [
 
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
+
 [build-system]
 requires = ["setuptools >= 77.0.3"]
 build-backend = "setuptools.build_meta"
+
+[project.optional-dependencies]
+test = ["pytest >= 7.0.0"]
