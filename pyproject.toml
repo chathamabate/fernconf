@@ -20,4 +20,10 @@ requires = ["setuptools >= 77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project.optional-dependencies]
-test = ["pytest >= 7.0.0"]
+test = ["pytest >= 9.0.0"]
+
+[tool.pytest]
+filterwarnings = [ "error" ]
+minversion = "9.0"
+addopts = [ "-ra", "-q", "--strict-config", "--strict-markers" ]
+testpaths = ["src/tests"]
