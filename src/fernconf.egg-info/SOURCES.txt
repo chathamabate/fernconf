@@ -1,9 +1,0 @@
-LICENSE
-README.md
-pyproject.toml
-src/fernconf/__init__.py
-src/fernconf/example.py
-src/fernconf.egg-info/PKG-INFO
-src/fernconf.egg-info/SOURCES.txt
-src/fernconf.egg-info/dependency_links.txt
-src/fernconf.egg-info/top_level.txt
