@@ -41,6 +41,8 @@ jobs:
     needs: build-and-test
     runs-on: ubuntu-latest
     if: ${{ github.ref == 'refs/heads/main' }}
+    permissions:
+      id-token: write
 
     steps:
     - name: Download Dist
