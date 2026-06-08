@@ -23,11 +23,11 @@ jobs:
     - name: Download Dependencies
       run: pip install -e ".[test]"
 
-    - name: Build
-      run: python -m build
-
     - name: Test
       run: pytest
+
+    - name: Package
+      run: python -m build
 
     - name: Upload Dist
       if: ${{ github.ref == 'refs/heads/main' }}
