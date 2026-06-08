@@ -4,7 +4,7 @@ on: push
 
 jobs:
   build-and-test:
-    name: Build and Test
+    name: Test and Package
     runs-on: ubuntu-latest
     steps:
     - name: Check out repository code
@@ -37,7 +37,7 @@ jobs:
         path: dist/
   
   deploy:
-    name: Deploy
+    name: Publish
     needs: build-and-test
     runs-on: ubuntu-latest
     if: ${{ github.ref == 'refs/heads/main' }}
@@ -49,10 +49,5 @@ jobs:
         name: dist
         path: dist/
 
-    - name: Deploy
-      run: echo deploying
-
-
-
-
-
+    - name: Publish package to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
