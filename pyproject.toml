@@ -32,5 +32,6 @@ addopts = [ "-ra", "-q", "--strict-config", "--strict-markers" ]
 testpaths = ["src/tests"]
 
 [tool.setuptools_scm]
-write_to = "VERSION.txt"
+version_scheme = "no-guess-dev"
+local_scheme = "no-local-version"
 
