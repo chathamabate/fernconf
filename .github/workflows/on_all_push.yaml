@@ -1,0 +1,15 @@
+name: Any Push Workflow
+
+on:
+  push:
+    branches:
+      - "**"
+jobs:
+  test-and-package:
+    name: Test and Package
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repository code
+      uses: actions/checkout@v4
+
+    - uses: ./.github/workflows/test_and_package.yaml

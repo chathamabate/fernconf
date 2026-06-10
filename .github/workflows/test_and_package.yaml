@@ -1,4 +1,4 @@
-name: Test and Package
+name: Test and Upload
 
 on: 
   workflow_call:
@@ -8,17 +8,12 @@ on:
         type: boolean
         default: false
 
-  push:
-    branches:
-      - "**"
-
 jobs:
   test-and-package:
     name: Test and Package
     runs-on: ubuntu-latest
     steps:
-    - name: Check out repository code
-      uses: actions/checkout@v4
+      # NOTE: This requires repo code to be checked out!
 
     - name: Setup Python
       uses: actions/setup-python@v5
