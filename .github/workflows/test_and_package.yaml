@@ -40,7 +40,7 @@ jobs:
       run: python -m build
 
     - name: Upload Dist
-      if: ${{ github.event_name == 'workflow_call' && inputs.upload }}
+      if: ${{ github.event_name == 'workflow_call' && inputs.upload == true }}
       uses: actions/upload-artifact@v4
       with:
         name: dist
