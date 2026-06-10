@@ -8,13 +8,11 @@ on:
 jobs:
   upload:
     name: Upload
-    runs-on: ubuntu-latest
-    steps:
-      - uses: ./.github/workflows/test_and_package.yaml
-        with:
-          upload: true
+    uses: ./.github/workflows/test_and_package.yaml
+    with:
+      upload: true
 
-  deploy:
+  publish:
     name: Publish
     needs: upload
     runs-on: ubuntu-latest
