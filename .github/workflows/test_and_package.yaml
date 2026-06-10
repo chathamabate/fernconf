@@ -39,11 +39,8 @@ jobs:
     - name: Package
       run: python -m build
 
-    - name: Test Results
-      run: echo "${{ github.event_name }} ${{ inputs.upload }}"
-
     - name: Upload Dist
-      if: ${{ github.event_name == 'workflow_call' && inputs.upload == true }}
+      if: ${{ inputs.upload }}
       uses: actions/upload-artifact@v4
       with:
         name: dist
