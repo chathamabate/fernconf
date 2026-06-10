@@ -7,6 +7,7 @@ on:
 
 jobs:
   upload:
+    name: Upload
     uses: ./.github/workflows/test_and_package.yaml
     with:
       upload: true
