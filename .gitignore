@@ -2,3 +2,4 @@ venv
 dist
 fernconf.egg-info
 __pycache__
+VERSION.txt

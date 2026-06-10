@@ -36,6 +36,8 @@ jobs:
         name: dist
         path: dist/
   
+        # I guess some sort of automatic tagging would be 
+        # cool!
   deploy:
     name: Publish
     needs: build-and-test

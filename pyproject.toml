@@ -1,6 +1,6 @@
 [project]
 name = "fernconf"
-version = "0.0.1"
+dynamic = ["version"]
 authors = [
   { name="Chatham Abate" },
 ]
@@ -16,7 +16,10 @@ license = "MIT"
 license-files = ["LICEN[CS]E*"]
 
 [build-system]
-requires = ["setuptools >= 77.0.3"]
+requires = [
+    "setuptools >= 77.0.3",
+    "setuptools_scm >= 6.2"
+]
 build-backend = "setuptools.build_meta"
 
 [project.optional-dependencies]
@@ -27,3 +30,7 @@ filterwarnings = [ "error" ]
 minversion = "9.0"
 addopts = [ "-ra", "-q", "--strict-config", "--strict-markers" ]
 testpaths = ["src/tests"]
+
+[tool.setuptools_scm]
+write_to = "VERSION.txt"
+
