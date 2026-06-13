@@ -1,9 +1,3 @@
 
-def add_numbers(x, y):
+def add_numbers(x: int, y: int) -> int:
     return x + y
-
-def mult_numbers(x, y):
-    return x * y
-
-def square(z):
-    return z * z
