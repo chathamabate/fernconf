@@ -34,7 +34,7 @@ jobs:
       run: pip install -e ".[test]"
 
     - name: Type Check
-      run: mypy
+      run: mypy src
 
     - name: Test
       run: pytest
