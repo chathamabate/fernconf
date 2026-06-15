@@ -1,13 +1,17 @@
 from __future__ import annotations
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from enum import Enum
 import re
-from typing import ClassVar, Any
+from typing import Any, override, Callable
 from result import Ok, Err, Result
 
-type FCValue = int | bool | str | dict[str, FCValue]
+type FCValue = int | bool | str | list[FCValue] | dict[str, FCValue]
 
-FCVALUE_KEY_PATTERN: re.Pattern = re.compile("[A-Za-z_][A-Za-zZ0-9_]*")
+FC_ID_PATTERN: re.Pattern = re.compile("[A-Za-z_][A-Za-zZ0-9_]*")
+""" 
+A regex pattern which is used often in fernconf to confirm various IDs/Keys follow a 
+reasonable format.
+"""
 
 def of(value: Any) -> Result[FCValue, str]:
     """
@@ -26,7 +30,7 @@ def of(value: Any) -> Result[FCValue, str]:
                 if not isinstance(k, str):
                     return Err("dict values must only have string keys")
 
-                if not FCVALUE_KEY_PATTERN.fullmatch(k):
+                if not FC_ID_PATTERN.fullmatch(k):
                     return Err(f"dict key name does not conform to FCValue regex: \"{k}\"")
 
                 match of(v):
@@ -39,7 +43,85 @@ def of(value: Any) -> Result[FCValue, str]:
         case _:
             return Err("FCValues must conform to typedef: int | bool | str | dict[str, FCValue]")
 
+class FCTranslator(ABC):
+    """
+    An FCTranslator is used to output shallow information to a specific target format.
 
+    Notice that `definition` takes `str | bool | int` as its input value and not an FCValue.
+    FCTranslator is meant to be somewhat separate to the FCValue/FCSchema paradigm. 
+
+    This need only know how to translate very simple values! It is up to the Schema to 
+    define what primitive values to actually define given a potentially large composite
+    FCValue.
+    """
+
+    @abstractmethod
+    def _definition(self, value_name: str, value: str | bool | int, docstring: str | None=None) -> str:
+        pass
+
+    def definition(self, value_name: str, value: str | bool | int, docstring: str | None=None) -> str:
+        """
+        Create a definition in the target format!
+
+        If `value_name` does not follow FC_ID_PATTERN, an exception will be thrown.
+        
+        Note that `value_name` need not appear exactly as is in the output!
+        For example, a translator may decide to make `value_name` all caps before
+        outputing.
+
+        `docstring` can span multiple lines.
+        The returned string can also span multiple lines!
+        """
+        if not FC_ID_PATTERN.fullmatch(value_name):
+            # Note that this does not return a result. If we make it here, the implementor
+            # made a mistake (not the user). 
+            raise Exception(f"value name did not follow FC ID regex format: \"{value_name}\"")
+        
+        return self.definition(value_name, value, docstring)
+        
+
+        
+class FCSchema(ABC):
+    """
+    An FCSchema is way of confirming an FCValue conforms to certain custom rules!
+    """
+
+    def __init__(self, desc: str=""):
+        self.desc = desc
+
+    @abstractmethod
+    def validate(self, value: FCValue) -> Result[FCValue, str]:
+        """
+        validate takes as input a FCValue and confirms that it abides by implementation 
+        specific rules. On success it should always return Ok(value).
+        """
+        pass
+
+# I guess, I don't totally understand the best way to 
+# Maybe like a definition callable is given??
+# With no
+
+# Ok, and what about like idk... output creation??
+# Isn't that important too?
+# shouldn't that also be reuseable??
+# The point of the schema is to prove that certain constraints are met!
+# And maybe also to spit out a default value?
+# Later, what, we pass is a value and a schema?? And like that does some sort of print
+# behavior, isn't that bad design?
+
+class RangeSchema(FCSchema):
+    @override 
+    def validate(self, value: FCValue) -> Result[FCValue, str]:
+        # Ok, well now what??
+        # Maybe a static type check schema??
+        # I mean, Can't these be listed and shit?
+        # There is no list schema... I feel like that would be cool too imo.
+        return Err("noop")
+
+# Ok, so we can get our FCValue...
+# What else do we need here... and FCSchema?
+# And what even is an FCSchema?
+# Ok, so now what?
 
 #class FCValue(metaclass=ABCMeta):
 #    @staticmethod
