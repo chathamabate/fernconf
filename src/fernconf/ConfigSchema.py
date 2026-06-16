@@ -56,30 +56,39 @@ class FCTranslator(ABC):
     """
 
     @abstractmethod
-    def _definition(self, value_name: str, value: str | bool | int, docstring: str | None=None) -> str:
+    def comment(self, message: list[str], docstring: bool=False) -> list[str]:
+        """
+        Create a comment in the target format.
+        Each element in `message` represents a single line of the comment message.
+        Returns a list of the lines of the created comment.
+        Neither input nor output lines should have newline characters!
+        """
         pass
 
-    def definition(self, value_name: str, value: str | bool | int, docstring: str | None=None) -> str:
+    @abstractmethod
+    def _definition(self, value_name: str, value: str | bool | int) -> list[str]:
+        pass
+
+    def definition(self, value_name: str, value: str | bool | int, docstring: list[str] | None=None) -> list[str]:
         """
         Create a definition in the target format!
 
         If `value_name` does not follow FC_ID_PATTERN, an exception will be thrown.
         
-        Note that `value_name` need not appear exactly as is in the output!
-        For example, a translator may decide to make `value_name` all caps before
-        outputing.
-
-        `docstring` can span multiple lines.
+        Note that `value_name` must appear EXACTLY as is in the output definition.
+        `docstring` should be a list of the lines of the docstring (with NO NEWLINE CHARACTERS).
         The returned string can also span multiple lines!
         """
         if not FC_ID_PATTERN.fullmatch(value_name):
             # Note that this does not return a result. If we make it here, the implementor
             # made a mistake (not the user). 
             raise Exception(f"value name did not follow FC ID regex format: \"{value_name}\"")
-        
-        return self.definition(value_name, value, docstring)
-        
 
+        def_lines = []
+        if docstring is not None:
+            def_lines += self.comment(docstring, True)
+
+        return def_lines + self._definition(value_name, value)
         
 class FCSchema(ABC):
     """
