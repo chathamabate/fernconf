@@ -1,5 +1,6 @@
 venv
 dist
+build
 fernconf.egg-info
 __pycache__
 VERSION.txt
