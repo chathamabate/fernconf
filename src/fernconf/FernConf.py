@@ -2,16 +2,18 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from enum import Enum
 import re
-from typing import Any, override, Callable
-from result import Ok, Err, Result
+from typing import Any, override, Callable, cast
+from result import Ok, Err, Result, do
 
 type FCValue = int | bool | str | list[FCValue] | dict[str, FCValue]
+
 
 FC_ID_PATTERN: re.Pattern = re.compile("[A-Za-z_][A-Za-zZ0-9_]*")
 """ 
 A regex pattern which is used often in fernconf to confirm various IDs/Keys follow a 
 reasonable format.
 """
+
 
 def fcv_of(value: Any) -> Result[FCValue, str]:
     """
@@ -29,7 +31,7 @@ def fcv_of(value: Any) -> Result[FCValue, str]:
             for i, v in enumerate(value):
                 match fcv_of(v):
                     case Ok(new_val):
-                        new_list += [new_val]
+                        new_list.append(new_val)
                     case Err(msg):
                         return Err(f"[{i}] {msg}")
             return Ok(new_list)
@@ -50,7 +52,8 @@ def fcv_of(value: Any) -> Result[FCValue, str]:
 
             return Ok(new_dict)
         case _:
-            return Err("FCValues must conform to typedef: int | bool | str | dict[str, FCValue]")
+            return Err("FCValues must conform to typedef: int | bool | str | list[FCValue] | dict[str, FCValue]")
+
 
 class FCTranslator(ABC):
     """
@@ -99,12 +102,13 @@ class FCTranslator(ABC):
 
         return def_lines + self._definition(value_name, value)
         
+
 class FCSchema(ABC):
     """
     An FCSchema is way of confirming an FCValue conforms to certain custom rules!
     """
 
-    def __init__(self, desc: str=""):
+    def __init__(self, desc: str | None=None):
         self.desc = desc
 
     @abstractmethod
@@ -115,125 +119,90 @@ class FCSchema(ABC):
         """
         pass
 
-# I guess, I don't totally understand the best way to 
-# Maybe like a definition callable is given??
-# With no
+    @abstractmethod
+    def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
+        """
+        Output the defined value with name prefix using `translator`.
+        
+        This function can assume that `value` was validated with `self.validate` before
+        calling this function.
+        """
+        pass
 
-# Ok, and what about like idk... output creation??
-# Isn't that important too?
-# shouldn't that also be reuseable??
-# The point of the schema is to prove that certain constraints are met!
-# And maybe also to spit out a default value?
-# Later, what, we pass is a value and a schema?? And like that does some sort of print
-# behavior, isn't that bad design?
 
-class RangeSchema(FCSchema):
+class FCSchemaBool(FCSchema):
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
-        # Ok, well now what??
-        # Maybe a static type check schema??
-        # I mean, Can't these be listed and shit?
-        # There is no list schema... I feel like that would be cool too imo.
-        return Err("noop")
+        if not isinstance(value, bool):
+            return Err(f"Given value is not of type bool")
 
-# Ok, so we can get our FCValue...
-# What else do we need here... and FCSchema?
-# And what even is an FCSchema?
-# Ok, so now what?
+        return Ok(value)
 
-#class FCValue(metaclass=ABCMeta):
-#    @staticmethod
-#    def of(value: Any) -> FCValue | None:
-#        match value:
-#            case int():
-#                return FCValueInt(value)
-#            case bool():
-#                return FCValueBool(value)
-#            case str():
-#                return FCValueStr(value)
-#            case dict():
-#                new_dict: dict[str, FCValue] = {}
-#                for k, v in value.items():
-#                    if not isinstance(k, str):
-#                        return None
-#
-#                    new_val = FCValue.of(v)
-#                    if new_val is None:
-#                        return None
-#
-#                    new_dict[k] = new_val
-#
-#                return FCValueObj(new_dict)
-#            case _:
-#                return None
-#        
-#class FCValueInt(FCValue):
-#    def __init__(self, value: int):
-#        self.value = value
-#
-#    def __str__(self) -> str:
-#        return str(self.value)
-#
-#class FCValueBool(FCValue):
-#    def __init__(self, value: bool):
-#        self.value = value
-#
-#    def __str__(self) -> str:
-#        return str(self.value)
-#
-#class FCValueStr(FCValue):
-#    def __init__(self, value: str):
-#        self.value = value
-#
-#    def __str__(self) -> str:
-#        return str(self.value)
-#
-#class FCValueObj(FCValue):
-#    def __init__(self, value: dict[str, FCValue]):
-#        self.value = value
-#
-#    def __str__(self) -> str:
-#        return "{" + ", ".join([f"\"{k}\": {str(v)}"   for k, v in self.value.items()]) + "}"
+    @override
+    def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
+        return translator.definition(prefix, cast(bool, value), [self.desc] if self.desc else None)
 
-# IDK, are there even benefits to this design above tbh??
-# I don't even really know at this point?
-# Honestly, I don't even really know??
-# Well, I guess there are constraints and such?
-# What does a schema even do?? It validates??
-# Based on defined rules???
-# Yeah, I guess that's really the whole point?
+class FCSchemaInt(FCSchema):
+    @override 
+    def validate(self, value: FCValue) -> Result[FCValue, str]:
+        if not isinstance(value, int):
+            return Err(f"Given value is not of type int")
 
-# Lit that this actually works!
-# print(FCValue.of({"a": 1, "b": {"c": 3}}))
-# So this is a fern config object ^ 
-# Which in theory can be parsed directly from JSON?
-# Ehhh, we may want a parse function as is imo...
+        return Ok(value)
 
+    @override
+    def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
+        return translator.definition(prefix, cast(int, value), [self.desc] if self.desc else None)
 
-#class Property(metaclass=ABCMeta):
-#    NAME_PATTERN: ClassVar[re.Pattern] = re.compile("[A-Z_][A-Z0-9_]*")
-#
-#    def __init__(self, name: str):
-#        if not Property.NAME_PATTERN.fullmatch(name):
-#            raise Exception(f"Invalid name given \"{name}\"")
-#
-#        self.name = name
-#
-#class PropertyString(Property):
-#    def __init__(self, name: str, value: str):
-#        super().__init__(name)
-#
-#        # By default, string properties apply no regex at all!
-#        # Even an empty stirng is technically valid.
-#        self.value = value
-#
-#class PropertyInteger(Property):
-#    def __init__(self, name: str, value: int):
-#        super().__init__(name)
-#        self.value = value;
-#
-## I mean, shouldn't a config really be a dictionary for fast lookup?
-## Ever thought of that one?
-#
-#class PropertyBoolean(Property):
-#    def __init__()
+class FCSchemaStr(FCSchema):
+    @override 
+    def validate(self, value: FCValue) -> Result[FCValue, str]:
+        if not isinstance(value, str):
+            return Err(f"Given value is not of type str")
+
+        return Ok(value)
+
+    @override
+    def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
+        return translator.definition(prefix, cast(str, value), [self.desc] if self.desc else None)
+
+class FCSchemaList(FCSchema):
+    def __init__(self, ele_schema: FCSchema, min_eles: int=0, max_eles: int=0, desc: str | None=None):
+        """
+        Check for a list of FCValues where each value follows the same schema.
+
+        If `max_eles` is 0, there is no limit to the number of elements in the list!
+        """
+        super().__init__(desc)
+        self.ele_schema = ele_schema
+        self.min_eles = min_eles
+        self.max_eles = max_eles
+
+        if min_eles > max_eles and max_eles != 0:
+            raise Exception(f"Invalid element count constraints ({str(min_eles)}, {str(max_eles)})")
+
+    @override 
+    def validate(self, value: FCValue) -> Result[FCValue, str]:
+        if not isinstance(value, list):
+            return Err(f"Given value is not of type list")
+        
+        list_value = list(value)
+        ele_count = len(list_value)
+
+        if ele_count < self.min_eles:
+            return Err(f"Given list has too few elements")
+
+        if ele_count > self.max_eles and self.max_eles != 0:
+            return Err(f"Given list has too many elements")
+
+        for i in range(ele_count):
+            child_res = self.ele_schema.validate(list_value[i])
+
+            if child_res.is_err():
+                return child_res.map_err(lambda msg: f"Error @ index {str(i)}: {msg}")
+
+        return Ok(value)
+
+    @override
+    def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
+        return []
