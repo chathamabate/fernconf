@@ -129,6 +129,24 @@ class FCSchema(ABC):
         """
         pass
 
+    """
+    NOTE: It is very important to realize the differences in how type checking should be 
+    handled in the above two abstract endpoints.
+
+    For `validate`, we are given a value at runtime who's type we know nothing about.
+    It is expected, that this value will sometimes abide by our schema, and sometimes not.
+    Type checks in `validate`, should thus be dynamic and runtime safe. If we get a `list`,
+    but we are expecting an `int`, an `Err` object should be returned with a descriptive
+    message. A rigorous `validate` implementation will likley include `match` statements and/or
+    `isinstance` calls for dynamic type checking.
+
+    `translate` on the other hand should be written with the understanding that at runtime it
+    will only ever be called with a value which passed `validate`. Here we can just assume
+    that the given value abides by our schema. We would only expect the use of `cast` in 
+    these functions to ensure static type checking passes. A type related runtime error
+    here would signal an error in the schema, not an error in user input!
+    """
+
 
 class FCSchemaBool(FCSchema):
     @override 
@@ -205,4 +223,6 @@ class FCSchemaList(FCSchema):
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
+        list_value = cast(list, value)
         return []
+
