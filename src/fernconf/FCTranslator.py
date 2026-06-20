@@ -1,6 +1,6 @@
-from fernconf.FCValue import FCValue, FC_ID_PATTERN
-
 from __future__ import annotations
+
+from fernconf.FCValue import FCValue, FC_ID_PATTERN
 from abc import ABC, abstractmethod
 from typing import Any, override, cast
 from result import Ok, Err, Result
@@ -51,3 +51,30 @@ class FCTranslator(ABC):
             def_lines += self.comment(docstring, True)
 
         return def_lines + self._definition(value_name, value)
+
+
+class FCTranslatorCLang(FCTranslator):
+    @override
+    def comment(self, message: list[str], docstring: bool=False) -> list[str]:
+        return (["/**"] if docstring else ["/*"]) + [" * " + line for line in message] + [" */"]
+
+    @override
+    def _definition(self, value_name: str, value: str | bool | int) -> list[str]:
+        match value:
+            case str():
+                return [f"#define {value_name} \"{value}\""]
+            case bool():
+                return [("" if value else "// ") + f"#define {value_name}"]
+            case int():
+                if value < 0:
+                    neg_suffix = "LL" if value < -0x8000_0000 else "L"
+                    return [f"#define {value_name} ({str(value)}{neg_suffix})"]
+                
+                pos_suffix = "ULL" if value > 0xFFFF_FFFF else "UL"
+                return [f"#define {value_name} (0x{value:X}{pos_suffix})"]
+                
+            case _:
+                raise Exception(f"Can't define given value \"{value_name}\"")
+
+FCT_CLANG = FCTranslatorCLang()
+
