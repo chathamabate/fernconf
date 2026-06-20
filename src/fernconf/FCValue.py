@@ -4,14 +4,42 @@ import re
 from typing import Any, override, cast
 from result import Ok, Err, Result
 
-type FCValue = int | bool | str | list[FCValue] | dict[str, FCValue]
-
-
 FC_ID_PATTERN: re.Pattern = re.compile("[A-Za-z_][A-Za-zZ0-9_]*")
 """ 
 A regex pattern which is used often in fernconf to confirm various IDs/Keys follow a 
 reasonable format.
 """
+
+type FCValue = int | bool | str | list[FCValue] | dict[str, FCValue]
+"""
+While not able to be expressed in this type defintion, FCValue integers must NEVER
+exceed 64-bits.
+
+This is enforced when creating an FCValue using `fcv_of` below.
+"""
+
+def fcv_int_check_result(value: int) -> Result[int, str]:
+    """
+    Confirm that an integer can fit into either a 64-bit signed integer, or a 64-bit 
+    unsigned integer!
+    """
+    if value < -0x8000_0000_0000_0000:
+        return Err(f"Given value exceeds 64-bit negative bound {str(value)}")
+
+    if value >= 0x1_0000_0000_0000_0000:
+        return Err(f"Given value exceends 64-bit unsigned positive bound {str(value)}")
+
+    return Ok(value)
+
+
+def fcv_int_check(value: int) -> None:
+    """
+    Same as `fcv_int_check_result`, but raises an actual exception instead.
+    """
+    res = fcv_int_check_result(value)
+    
+    if res.is_err():
+        raise Exception(res.err())
 
 
 def fcv_of(value: Any) -> Result[FCValue, str]:
@@ -21,9 +49,16 @@ def fcv_of(value: Any) -> Result[FCValue, str]:
     (For, example a JSON file)
 
     This file creates a deep copy of `value` on success.
+
+    NOTE: This functions enforces GLOBALLY REQUIRED CONSTRAINTS which cannot be expressed
+    in a simple python type definition. When creating a FCValue, this funtion must
+    ALWAYS BE USED!
     """
     match value:
-        case int() | bool() | str():
+        case int():
+            return fcv_int_check_result(value)
+
+        case bool() | str():
             return Ok(value)
         case list():
             new_list: list[FCValue] = []

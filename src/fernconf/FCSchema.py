@@ -1,10 +1,11 @@
-from fernconf.FCValue import FCValue, FC_ID_PATTERN
-from fernconf.FCTranslator import FCTranslator
-
 from __future__ import annotations
+
+from fernconf.FCValue import FCValue, FC_ID_PATTERN, fcv_of
+from fernconf.FCTranslator import FCTranslator, FCTranslatorCLang
+
 from abc import ABC, abstractmethod
 from typing import Any, override, cast
-from result import Ok, Err, Result
+from result import Ok, Err, Result, do
 
 class FCSchema(ABC):
     """
@@ -14,6 +15,19 @@ class FCSchema(ABC):
     def __init__(self, desc: str | None=None):
         self.desc = desc
 
+    def default(self) -> FCValue:
+        raise Exception("Given Schema has no default value")
+
+    def with_default(self, default_value: FCValue) -> FCSchema:
+        return FCSchemaWithDefault(self, default_value)
+
+    def with_default_any(self, default_value: Any) -> FCSchema:
+        default_fcv = fcv_of(default_value)
+        if default_fcv.is_err():
+            raise Exception(f"Default value is not a FCValue: {default_fcv.unwrap_err()}")
+
+        return self.with_default(default_fcv.unwrap())
+
     @abstractmethod
     def validate(self, value: FCValue) -> Result[FCValue, str]:
         """
@@ -21,6 +35,12 @@ class FCSchema(ABC):
         specific rules. On success it should always return Ok(value).
         """
         pass
+
+    def validate_any(self, value: Any) -> Result[FCValue, str]:
+        return do(
+            self.validate(fcv)
+            for fcv in fcv_of(value)
+        )
 
     @abstractmethod
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
@@ -51,6 +71,54 @@ class FCSchema(ABC):
     """
 
 
+class FCSchemaWithDefault(FCSchema):
+    """
+    At first glance the existence of this class may seem overengineered.
+
+    Here is what my original solution kinda looked like:
+
+    class FCSchema:
+        def __init__(self, ... default_value ...):
+            ...
+            # Validating the default value at the end is problematic as the derrived classmethod
+            # is yet to be fully initialized! self.validate may depend on fields/structures
+            # set up in child class constructor!
+            self.validate(default_value)
+
+    The problem is:
+        If a schema has a default value, that value must also abide by the schema itself.
+        I cannot run this validation check in the super class constructor since at that point
+        the derrived schema is not initialized.
+        Without this class, whenever someone overrides the FCSchema base class, they'd need
+        to remember to call self.validate(default_value) at the very end of their constructor!
+
+    FCSchemaWithDefault is now given a schema when it is already entirely initialized!
+    Using it to validate the given default value causes no problems!
+    """
+
+    def __init__(self, schema: FCSchema, default_value: FCValue):
+        super().__init__() # We won't store our own description.
+
+        valid_default = schema.validate(default_value)
+        if valid_default.is_err():
+            raise Exception(f"Default value failed self validation: {valid_default.unwrap_err()}")
+
+        self.schema = schema
+        self.default_value = default_value
+    
+    @override
+    def default(self) -> FCValue:
+        return self.default_value
+    
+    @override
+    def validate(self, value: FCValue) -> Result[FCValue, str]:
+        return self.schema.validate(value)
+
+    @override
+    def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
+        return self.schema.translate(prefix, value, translator)
+
+
 class FCSchemaBool(FCSchema):
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
@@ -63,17 +131,21 @@ class FCSchemaBool(FCSchema):
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
         return translator.definition(prefix, cast(bool, value), [self.desc] if self.desc is not None else None)
 
+
 class FCSchemaInt(FCSchema):
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
         if not isinstance(value, int):
             return Err(f"Given value is not of type int")
 
+        # Given `value` is a valid FCValue, there is no need to do 64-bit bounds checking here!
+
         return Ok(value)
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
         return translator.definition(prefix, cast(int, value), [self.desc] if self.desc is not None else None)
+
 
 class FCSchemaStr(FCSchema):
     @override 
@@ -129,10 +201,10 @@ class FCSchemaList(FCSchema):
         output_lines = []
 
         if self.desc is not None:
-            output_lines += [self.desc]
+            output_lines += translator.comment([self.desc])
 
         list_value = cast(list[FCValue], value)
         for i in range(len(list_value)):
-            output_lines += self.ele_schema.translate(prefix + str(i), list_value[i], translator)
+            output_lines += self.ele_schema.translate(prefix + "_" + str(i), list_value[i], translator)
 
         return output_lines
