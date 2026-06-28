@@ -39,8 +39,7 @@ class TestSimpleSchema:
 
     def test_schema_with_default(self) -> None:
         s = FCSchemaStr("My Str")
-        with pytest.raises(Exception):
-            s.default() # No default value yet!
+        assert s.default().is_err() # No default value yet!
 
         with pytest.raises(Exception):
             s.with_default_any(1.23) # Should fail due to not being an FCValue
@@ -49,4 +48,5 @@ class TestSimpleSchema:
             s.with_default_any(1) # Should fail due to not being a string.
 
         ds = s.with_default_any("Def value")
-        assert ds.default() == "Def value"
+        assert ds.default() == Ok("Def value")
+    

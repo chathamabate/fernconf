@@ -16,6 +16,9 @@ While not able to be expressed in this type defintion, FCValue integers must NEV
 exceed 64-bits.
 
 This is enforced when creating an FCValue using `fcv_of` below.
+
+Additionally, once you have an FCValue, it should be treated as IMMUTABLE!!!
+Always use `fcv_of`below when creating new FCValues!
 """
 
 def fcv_int_check_result(value: int) -> Result[int, str]:

@@ -4,7 +4,7 @@ from fernconf.FCValue import FCValue, FC_ID_PATTERN, fcv_of
 from fernconf.FCTranslator import FCTranslator, FCTranslatorCLang
 
 from abc import ABC, abstractmethod
-from typing import Any, override, cast
+from typing import Any, override, cast, Callable
 from result import Ok, Err, Result, do
 
 class FCSchema(ABC):
@@ -15,8 +15,13 @@ class FCSchema(ABC):
     def __init__(self, desc: str | None=None):
         self.desc = desc
 
-    def default(self) -> FCValue:
-        raise Exception("Given Schema has no default value")
+    def default(self) -> Result[FCValue, str]:
+        """
+        Here more than ever, make sure that the value returned is not changed!
+        It is completely legal for a Schema to have a single default object it always returns
+        a reference to!
+        """
+        return Err("Given schema provides no default FCValue")
 
     def with_default(self, default_value: FCValue) -> FCSchema:
         return FCSchemaWithDefault(self, default_value)
@@ -32,7 +37,12 @@ class FCSchema(ABC):
     def validate(self, value: FCValue) -> Result[FCValue, str]:
         """
         validate takes as input a FCValue and confirms that it abides by implementation 
-        specific rules. On success it should always return Ok(value).
+        specific rules.
+
+        On success it should return Ok(value | new_value).
+        The idea is that given a `value` which may not be entirely complete, this function
+        may decide to return a new complete value. For example, populating a struct with 
+        default values for optional fields which were not provided.
         """
         pass
 
@@ -107,8 +117,8 @@ class FCSchemaWithDefault(FCSchema):
         self.default_value = default_value
     
     @override
-    def default(self) -> FCValue:
-        return self.default_value
+    def default(self) -> Result[FCValue, str]:
+        return Ok(self.default_value)
     
     @override
     def validate(self, value: FCValue) -> Result[FCValue, str]:
@@ -118,6 +128,10 @@ class FCSchemaWithDefault(FCSchema):
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
         return self.schema.translate(prefix, value, translator)
 
+class FCSchemaWithExtraChecks(FSchema):
+    # Why not just do inheritance here?
+    def __init__(self, schema: FCSchema, *checks ):
+        pass
 
 class FCSchemaBool(FCSchema):
     @override 
@@ -159,12 +173,14 @@ class FCSchemaStr(FCSchema):
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
         return translator.definition(prefix, cast(str, value), [self.desc] if self.desc is not None else None)
 
-class FCSchemaList(FCSchema):
+class FCSchemaStrictList(FCSchema):
     def __init__(self, ele_schema: FCSchema, min_eles: int=0, max_eles: int=0, desc: str | None=None):
         """
         Check for a list of FCValues where each value follows the same schema.
 
         If `max_eles` is 0, there is no limit to the number of elements in the list!
+
+        NOTE: Like bool | int | str, this has no builtin default value.
         """
         super().__init__(desc)
         self.ele_schema = ele_schema
@@ -179,7 +195,7 @@ class FCSchemaList(FCSchema):
         if not isinstance(value, list):
             return Err(f"Given value is not of type list")
         
-        list_value = list(value)
+        list_value = cast(list[FCValue], value)
         ele_count = len(list_value)
 
         if ele_count < self.min_eles:
@@ -187,14 +203,16 @@ class FCSchemaList(FCSchema):
 
         if ele_count > self.max_eles and self.max_eles != 0:
             return Err(f"Given list has too many elements")
-
+        
+        new_value = []
         for i in range(ele_count):
             child_res = self.ele_schema.validate(list_value[i])
-
             if child_res.is_err():
                 return child_res.map_err(lambda msg: f"Error @ index {str(i)}: {msg}")
 
-        return Ok(value)
+            new_value.append(child_res.unwrap())
+
+        return Ok(new_value)
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
@@ -208,3 +226,55 @@ class FCSchemaList(FCSchema):
             output_lines += self.ele_schema.translate(prefix + "_" + str(i), list_value[i], translator)
 
         return output_lines
+
+class FCSchemaStruct(FCSchema):
+    def __init__(self, fields: list[tuple[str, FCSchema]], desc: str | None=None):
+        """
+        A Struct is just an ordered list of named values.
+
+        The struct schema actually allows two different ways of specifying a struct.
+        A) as an order list of values.
+        B) as an object mapping field names to values. 
+
+        In both cases, missing values will be attempted to be filled in with defaults.
+        The dict representation is always what is returned from validate!
+        """
+        if len(fields) == 0:
+            raise Exception("An FCSchemaStruct cannot be empty!")
+        
+        self.fields = fields
+        self.fields_dict: dict[str, FCSchema] = {}
+
+        # We will try to generate a single default value here!
+        self.default_result: Result[dict[str, FCValue], str] = Ok({})
+
+        for (field, schema) in fields:
+            if not FC_ID_PATTERN.fullmatch(field):
+                raise Exception(f"FCSchemaStruct field name is invalid \"{field}\"")
+            
+            if field in self.fields_dict:
+                raise Exception(f"FCSchemaStruct has repeat field name \"{field}\"")
+
+            self.fields_dict[field] = schema
+
+            if self.default_result.is_ok():
+                field_dv = schema.default()
+                if field_dv.is_ok():
+                    self.default_result.unwrap()[field] = field_dv.unwrap()
+                else:
+                    # NOTE: That is totally ok for our struct not to have a default value!
+                    self.default_result = Err(f"Struct has no default value, (\"{field}\" is required)")
+        
+    @override
+    def default(self) -> Result[FCValue, str]:
+        return self.default_result 
+
+    @override 
+    def validate(self, value: FCValue) -> Result[FCValue, str]:
+        # Uhmmmm, now what? IDEK.... Uhhhh, maybe some bullshit?
+        return Err("ah")
+
+    @override
+    def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
+        return []
+
