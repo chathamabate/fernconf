@@ -29,16 +29,11 @@ class FCSchema(ABC):
     def with_description(self, desc: list[str]) -> FCSchema:
         return FCSchemaWithDescription(self, desc)
 
-    def comment(self) -> list[str]:
-        """
-        Similar to `description`, but this instead SHOULD be output in definitions!
-
-        This should return a pointer to a NEW list! Unlike FCValue's, this is just a normal
-        mutable python list!
-        """
-        return []
-
     def with_comment(self, comment: list[str]) -> FCSchema:
+        """
+        Adding a comment is *like* adding a description, however this is only seen in output
+        definitions.
+        """
         return FCSchemaWithComment(self, comment)
 
     def default(self) -> Result[FCValue, str]:
@@ -122,10 +117,6 @@ class FCSchemaWrapper(FCSchema):
         return self.inner.description()
 
     @override
-    def comment(self) -> list[str]:
-        return self.inner.comment()
-
-    @override
     def default(self) -> Result[FCValue, str]:
         return self.inner.default()
 
@@ -159,21 +150,17 @@ class FCSchemaWithDescription(FCSchemaWrapper):
         return output_desc
 
 class FCSchemaWithComment(FCSchemaWrapper):
-    def __init__(self, inner: FCSchema, com: list[str]):
+    def __init__(self, inner: FCSchema, comment: list[str]):
         super().__init__(inner)
 
-        if len(com) == 0:
-            raise Exception("Description cannot be empty!")
+        if len(comment) == 0:
+            raise Exception("Comment cannot be empty!")
 
-        self.com = com[:]
+        self.comment = comment[:]
 
     @override
-    def comment(self) -> list[str]:
-        output_com = self.com[:]
-        inner_com = super().comment()
-        if len(inner_com) > 0:
-            output_com += [""] + inner_com
-        return output_com
+    def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
+        return translator.comment(self.comment) + self.inner.translate(prefix, value, translator)
 
 class FCSchemaWithDefault(FCSchemaWrapper):
     def __init__(self, schema: FCSchema, default_value: FCValue):
@@ -245,7 +232,7 @@ class FCSchemaBool(FCSchema):
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
-        return translator.definition(prefix, cast(bool, value), self.comment())
+        return translator.definition(prefix, cast(bool, value))
 
 class FCSchemaInt(FCSchema):
     @override 
@@ -259,7 +246,7 @@ class FCSchemaInt(FCSchema):
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
-        return translator.definition(prefix, cast(int, value), self.comment())
+        return translator.definition(prefix, cast(int, value))
 
 
 class FCSchemaStr(FCSchema):
@@ -272,10 +259,10 @@ class FCSchemaStr(FCSchema):
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
-        return translator.definition(prefix, cast(str, value), self.comment())
+        return translator.definition(prefix, cast(str, value))
 
 class FCSchemaStrictList(FCSchema):
-    def __init__(self, ele_schema: FCSchema, min_eles: int=0, max_eles: int=0, desc: str | None=None):
+    def __init__(self, ele_schema: FCSchema, min_eles: int=0, max_eles: int=0):
         """
         Check for a list of FCValues where each value follows the same schema.
 
@@ -283,7 +270,6 @@ class FCSchemaStrictList(FCSchema):
 
         NOTE: Like bool | int | str, this has no builtin default value.
         """
-        super().__init__(desc)
         self.ele_schema = ele_schema
         self.min_eles = min_eles
         self.max_eles = max_eles
@@ -318,9 +304,6 @@ class FCSchemaStrictList(FCSchema):
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
         output_lines = []
-
-        if self.desc is not None:
-            output_lines += translator.comment([self.desc])
 
         list_value = cast(list[FCValue], value)
         for i in range(len(list_value)):

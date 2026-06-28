@@ -31,28 +31,20 @@ class FCTranslator(ABC):
     def _definition(self, value_name: str, value: str | bool | int) -> list[str]:
         pass
 
-    def definition(self, value_name: str, value: str | bool | int, comment: list[str]) -> list[str]:
+    def definition(self, value_name: str, value: str | bool | int) -> list[str]:
         """
         Create a definition in the target format!
 
         If `value_name` does not follow FC_ID_PATTERN, an exception will be thrown.
         
         Note that `value_name` must appear EXACTLY as is in the output definition.
-        `docstring` should be a list of the lines of the docstring (with NO NEWLINE CHARACTERS).
-        The returned string can also span multiple lines!
-
-        Also, if `len(comment) == 0` it will NOT be passed into `self.comment`
         """
         if not FC_ID_PATTERN.fullmatch(value_name):
             # Note that this does not return a result. If we make it here, the implementor
             # made a mistake (not the user). 
             raise Exception(f"value name did not follow FC ID regex format: \"{value_name}\"")
 
-        def_lines = []
-        if len(comment) > 0:
-            def_lines += self.comment(comment)
-
-        return def_lines + self._definition(value_name, value)
+        return self._definition(value_name, value)
 
 
 class FCTranslatorCLang(FCTranslator):
