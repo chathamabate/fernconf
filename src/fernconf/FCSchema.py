@@ -33,6 +33,9 @@ class FCSchema(ABC):
 
         return self.with_default(default_fcv.unwrap())
 
+    def with_extra_checks(self, **checks: Callable[[FCValue], Result[None, str]]) -> FCSchema:
+        return FCSchemaWithExtraChecks(self, **checks)
+
     @abstractmethod
     def validate(self, value: FCValue) -> Result[FCValue, str]:
         """
@@ -131,34 +134,55 @@ class FCSchemaWithDefault(FCSchema):
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
         return self.schema.translate(prefix, value, translator)
 
-class FCSchemaWithExtraChecks(FSchema):
-    def __init__(self, schema: FCSchema, *checks: Callable[[FCValue], Result[None, str]]):
-        """
-        This composite schema is meant for easy extension of provided schema types without
-        the need of creating a whole new class!
+class FCSchemaWithExtraChecks(FCSchema):
+    """
+    This composite schema is meant for easy extension of provided schema types without
+    the need of creating a whole new class!
+    """
 
-        NOTE: if the wrapped schema has a default value, it'll be checked against `checks` here
-        in this constructor and raise an exception on failure.
+    def __init__(self, schema: FCSchema, **checks: Callable[[FCValue], Result[None, str]]):
         """
+        If `schema` has a default value, it will be checked here in this constructor.
+        An exception will be raised if the default value does not conform to the 
+        extra checks.
+        """
+        super().__init__()
+
         if len(checks) == 0:
             raise Exception("An FCSchemaWithExtraChecks must have at least 1 check")
-
+        
+        self.schema = schema
         self.checks = checks
-
-        # Should extra checks have like, IDK, names though?
-        # I feel like that could be pretty cool tho tbh...
-        # Yeah, I think so too, that'd be dope asf.
-        # The question is, how do we know a default value is actually populated correctly?
 
         dv_res = schema.default()
         if dv_res.is_ok(): # We only check default, if the wrapped schema even has a default!
             dv = dv_res.unwrap()
-            for check in self.checks:
+            for check_name, check in self.checks.items():
                 check_res = check(dv)
                 if check_res.is_err():
-                    raise Exception()
+                    raise Exception(f"Default value failed check \"{check_name}\": {check_res.unwrap_err()}")
+    @override
+    def default(self) -> Result[FCValue, str]:
+        return self.schema.default()
+    
+    @override
+    def validate(self, value: FCValue) -> Result[FCValue, str]:
+        res = self.schema.validate(value)
 
-        pass
+        # Always perform extra checks AFTER initial validation!
+        if res.is_ok():
+            v = res.unwrap()
+            for check_name, check in self.checks.items():
+                check_res = check(v)
+                if check_res.is_err():
+                    return Err(f"Value failed check \"{check_name}\": {check_res.unwrap_err()}")
+
+        return res
+
+    @override
+    def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
+        return self.schema.translate(prefix, value, translator)
+
 
 class FCSchemaBool(FCSchema):
     @override 
