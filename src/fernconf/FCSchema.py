@@ -24,7 +24,10 @@ class FCSchema(ABC):
         This should return a pointer to a NEW list! Unlike FCValue's, this is just a normal
         mutable python list!
         """
-        return ""
+        return []
+
+    def with_description(self, desc: list[str]) -> FCSchema:
+        return FCSchemaWithDescription(self, desc)
 
     def comment(self) -> list[str]:
         """
@@ -34,6 +37,9 @@ class FCSchema(ABC):
         mutable python list!
         """
         return []
+
+    def with_comment(self, comment: list[str]) -> FCSchema:
+        return FCSchemaWithComment(self, comment)
 
     def default(self) -> Result[FCValue, str]:
         """
@@ -112,12 +118,28 @@ class FCSchemaWrapper(FCSchema):
         self.inner = inner
 
     @override
+    def description(self) -> list[str]:
+        return self.inner.description()
+
+    @override
+    def comment(self) -> list[str]:
+        return self.inner.comment()
+
+    @override
+    def default(self) -> Result[FCValue, str]:
+        return self.inner.default()
+
+    @override
     def validate(self, value: FCValue) -> Result[FCValue, str]:
         return self.inner.validate(value)
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
         return self.inner.translate(prefix, value, translator)
+
+#
+# Essential Composites
+#
 
 class FCSchemaWithDescription(FCSchemaWrapper):
     def __init__(self, inner: FCSchema, desc: list[str]):
@@ -131,45 +153,35 @@ class FCSchemaWithDescription(FCSchemaWrapper):
     @override
     def description(self) -> list[str]:
         output_desc = self.desc[:]
-        inner_desc = self.inner.description()
+        inner_desc = super().description()
         if len(inner_desc) > 0:
             output_desc += [""] + inner_desc
         return output_desc
 
+class FCSchemaWithComment(FCSchemaWrapper):
+    def __init__(self, inner: FCSchema, com: list[str]):
+        super().__init__(inner)
 
-class FCSchemaWithDefault(FCSchema):
-    """
-    At first glance the existence of this class may seem overengineered.
+        if len(com) == 0:
+            raise Exception("Description cannot be empty!")
 
-    Here is what my original solution kinda looked like:
+        self.com = com[:]
 
-    class FCSchema:
-        def __init__(self, ... default_value ...):
-            ...
-            # Validating the default value at the end is problematic as the derrived classmethod
-            # is yet to be fully initialized! self.validate may depend on fields/structures
-            # set up in child class constructor!
-            self.validate(default_value)
+    @override
+    def comment(self) -> list[str]:
+        output_com = self.com[:]
+        inner_com = super().comment()
+        if len(inner_com) > 0:
+            output_com += [""] + inner_com
+        return output_com
 
-    The problem is:
-        If a schema has a default value, that value must also abide by the schema itself.
-        I cannot run this validation check in the super class constructor since at that point
-        the derrived schema is not initialized.
-        Without this class, whenever someone overrides the FCSchema base class, they'd need
-        to remember to call self.validate(default_value) at the very end of their constructor!
-
-    FCSchemaWithDefault is now given a schema when it is already entirely initialized!
-    Using it to validate the given default value causes no problems!
-    """
-
+class FCSchemaWithDefault(FCSchemaWrapper):
     def __init__(self, schema: FCSchema, default_value: FCValue):
-        super().__init__() # We won't store our own description.
+        super().__init__(schema) 
 
         valid_default = schema.validate(default_value)
         if valid_default.is_err():
             raise Exception(f"Default value failed self validation: {valid_default.unwrap_err()}")
-
-        self.schema = schema
 
         # Remember, `self.default_value` may contain more than what is provided in 
         # `default_value`. `schema.validate` may populate it with unspecified fields!
@@ -178,16 +190,8 @@ class FCSchemaWithDefault(FCSchema):
     @override
     def default(self) -> Result[FCValue, str]:
         return Ok(self.default_value)
-    
-    @override
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
-        return self.schema.validate(value)
 
-    @override
-    def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
-        return self.schema.translate(prefix, value, translator)
-
-class FCSchemaWithExtraChecks(FCSchema):
+class FCSchemaWithExtraChecks(FCSchemaWrapper):
     """
     This composite schema is meant for easy extension of provided schema types without
     the need of creating a whole new class!
@@ -199,12 +203,11 @@ class FCSchemaWithExtraChecks(FCSchema):
         An exception will be raised if the default value does not conform to the 
         extra checks.
         """
-        super().__init__()
+        super().__init__(schema)
 
         if len(checks) == 0:
             raise Exception("An FCSchemaWithExtraChecks must have at least 1 check")
         
-        self.schema = schema
         self.checks = checks
 
         dv_res = schema.default()
@@ -215,12 +218,8 @@ class FCSchemaWithExtraChecks(FCSchema):
                 if check_res.is_err():
                     raise Exception(f"Default value failed check \"{check_name}\": {check_res.unwrap_err()}")
     @override
-    def default(self) -> Result[FCValue, str]:
-        return self.schema.default()
-    
-    @override
     def validate(self, value: FCValue) -> Result[FCValue, str]:
-        res = self.schema.validate(value)
+        res = super().validate(value)
 
         # Always perform extra checks AFTER initial validation!
         if res.is_ok():
@@ -232,10 +231,9 @@ class FCSchemaWithExtraChecks(FCSchema):
 
         return res
 
-    @override
-    def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
-        return self.schema.translate(prefix, value, translator)
-
+#
+# Primitive types
+#
 
 class FCSchemaBool(FCSchema):
     @override 
@@ -247,8 +245,7 @@ class FCSchemaBool(FCSchema):
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
-        return translator.definition(prefix, cast(bool, value), [self.desc] if self.desc is not None else None)
-
+        return translator.definition(prefix, cast(bool, value), self.comment())
 
 class FCSchemaInt(FCSchema):
     @override 
@@ -262,7 +259,7 @@ class FCSchemaInt(FCSchema):
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
-        return translator.definition(prefix, cast(int, value), [self.desc] if self.desc is not None else None)
+        return translator.definition(prefix, cast(int, value), self.comment())
 
 
 class FCSchemaStr(FCSchema):
@@ -275,7 +272,7 @@ class FCSchemaStr(FCSchema):
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
-        return translator.definition(prefix, cast(str, value), [self.desc] if self.desc is not None else None)
+        return translator.definition(prefix, cast(str, value), self.comment())
 
 class FCSchemaStrictList(FCSchema):
     def __init__(self, ele_schema: FCSchema, min_eles: int=0, max_eles: int=0, desc: str | None=None):
