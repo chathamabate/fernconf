@@ -114,7 +114,10 @@ class FCSchemaWithDefault(FCSchema):
             raise Exception(f"Default value failed self validation: {valid_default.unwrap_err()}")
 
         self.schema = schema
-        self.default_value = default_value
+
+        # Remember, `self.default_value` may contain more than what is provided in 
+        # `default_value`. `schema.validate` may populate it with unspecified fields!
+        self.default_value = valid_default.unwrap() 
     
     @override
     def default(self) -> Result[FCValue, str]:
@@ -129,8 +132,32 @@ class FCSchemaWithDefault(FCSchema):
         return self.schema.translate(prefix, value, translator)
 
 class FCSchemaWithExtraChecks(FSchema):
-    # Why not just do inheritance here?
-    def __init__(self, schema: FCSchema, *checks ):
+    def __init__(self, schema: FCSchema, *checks: Callable[[FCValue], Result[None, str]]):
+        """
+        This composite schema is meant for easy extension of provided schema types without
+        the need of creating a whole new class!
+
+        NOTE: if the wrapped schema has a default value, it'll be checked against `checks` here
+        in this constructor and raise an exception on failure.
+        """
+        if len(checks) == 0:
+            raise Exception("An FCSchemaWithExtraChecks must have at least 1 check")
+
+        self.checks = checks
+
+        # Should extra checks have like, IDK, names though?
+        # I feel like that could be pretty cool tho tbh...
+        # Yeah, I think so too, that'd be dope asf.
+        # The question is, how do we know a default value is actually populated correctly?
+
+        dv_res = schema.default()
+        if dv_res.is_ok(): # We only check default, if the wrapped schema even has a default!
+            dv = dv_res.unwrap()
+            for check in self.checks:
+                check_res = check(dv)
+                if check_res.is_err():
+                    raise Exception()
+
         pass
 
 class FCSchemaBool(FCSchema):
