@@ -18,7 +18,7 @@ class FCTranslator(ABC):
     """
 
     @abstractmethod
-    def comment(self, message: list[str], docstring: bool=False) -> list[str]:
+    def comment(self, message: list[str]) -> list[str]:
         """
         Create a comment in the target format.
         Each element in `message` represents a single line of the comment message.
@@ -31,7 +31,7 @@ class FCTranslator(ABC):
     def _definition(self, value_name: str, value: str | bool | int) -> list[str]:
         pass
 
-    def definition(self, value_name: str, value: str | bool | int, docstring: list[str] | None=None) -> list[str]:
+    def definition(self, value_name: str, value: str | bool | int, comment: list[str] | None=None) -> list[str]:
         """
         Create a definition in the target format!
 
@@ -48,15 +48,15 @@ class FCTranslator(ABC):
 
         def_lines = []
         if docstring is not None:
-            def_lines += self.comment(docstring, True)
+            def_lines += self.comment(comment)
 
         return def_lines + self._definition(value_name, value)
 
 
 class FCTranslatorCLang(FCTranslator):
     @override
-    def comment(self, message: list[str], docstring: bool=False) -> list[str]:
-        return (["/**"] if docstring else ["/*"]) + [" * " + line for line in message] + [" */"]
+    def comment(self, message: list[str]) -> list[str]:
+        return ["/*"] + [" * " + line for line in message] + [" */"]
 
     @override
     def _definition(self, value_name: str, value: str | bool | int) -> list[str]:

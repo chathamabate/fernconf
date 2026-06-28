@@ -12,8 +12,28 @@ class FCSchema(ABC):
     An FCSchema is way of confirming an FCValue conforms to certain custom rules!
     """
 
-    def __init__(self, desc: str | None=None):
-        self.desc = desc
+    def __init__(self):
+        pass
+
+    def description(self) -> list[str]:
+        """
+        A Schema can specify a description. 
+
+        This is NOT reflected in the output definitions in any way!
+
+        This should return a pointer to a NEW list! Unlike FCValue's, this is just a normal
+        mutable python list!
+        """
+        return ""
+
+    def comment(self) -> list[str]:
+        """
+        Similar to `description`, but this instead SHOULD be output in definitions!
+
+        This should return a pointer to a NEW list! Unlike FCValue's, this is just a normal
+        mutable python list!
+        """
+        return []
 
     def default(self) -> Result[FCValue, str]:
         """
@@ -82,6 +102,39 @@ class FCSchema(ABC):
     these functions to ensure static type checking passes. A type related runtime error
     here would signal an error in the schema, not an error in user input!
     """
+
+class FCSchemaWrapper(FCSchema):
+    """
+    This is meant to be used as a base class for FCSchema which simply wrap a pre-existing
+    concrete schema.
+    """
+    def __init__(self, inner: FCSchema):
+        self.inner = inner
+
+    @override
+    def validate(self, value: FCValue) -> Result[FCValue, str]:
+        return self.inner.validate(value)
+
+    @override
+    def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
+        return self.inner.translate(prefix, value, translator)
+
+class FCSchemaWithDescription(FCSchemaWrapper):
+    def __init__(self, inner: FCSchema, desc: list[str]):
+        super().__init__(inner)
+
+        if len(desc) == 0:
+            raise Exception("Description cannot be empty!")
+
+        self.desc = desc[:]
+
+    @override
+    def description(self) -> list[str]:
+        output_desc = self.desc[:]
+        inner_desc = self.inner.description()
+        if len(inner_desc) > 0:
+            output_desc += [""] + inner_desc
+        return output_desc
 
 
 class FCSchemaWithDefault(FCSchema):
