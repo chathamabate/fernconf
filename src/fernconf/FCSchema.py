@@ -234,6 +234,8 @@ class FCSchemaBool(FCSchema):
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
         return translator.definition(prefix, cast(bool, value))
 
+FCS_BOOL = FCSchemaBool()
+
 class FCSchemaInt(FCSchema):
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
@@ -248,6 +250,7 @@ class FCSchemaInt(FCSchema):
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
         return translator.definition(prefix, cast(int, value))
 
+FCS_INT = FCSchemaInt()
 
 class FCSchemaStr(FCSchema):
     @override 
@@ -260,6 +263,12 @@ class FCSchemaStr(FCSchema):
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
         return translator.definition(prefix, cast(str, value))
+
+FCS_STR = FCSchemaStr()
+
+#
+# Standard Composites
+#
 
 class FCSchemaStrictList(FCSchema):
     def __init__(self, ele_schema: FCSchema, min_eles: int=0, max_eles: int=0):
@@ -317,7 +326,7 @@ class FCSchemaStruct(FCSchema):
         A Struct is just an ordered list of named values.
 
         The struct schema actually allows two different ways of specifying a struct.
-        A) as an order list of values.
+        A) as an ordered list of values.
         B) as an object mapping field names to values. 
 
         In both cases, missing values will be attempted to be filled in with defaults.
