@@ -80,7 +80,7 @@ class TestSimpleComposites:
         s = FCS_INT
         assert s.validate_any(1) == Ok(1)
 
-        s = s.with_extra_checks(even_check=lambda v: Ok(None) if v % 2 == 0 else Err("Must be even"))
+        s = s.with_extra_checks(even_check=lambda v: Ok(None) if cast(int, v) % 2 == 0 else Err("Must be even"))
         assert s.validate_any(1).is_err()
 
         with pytest.raises(Exception):
@@ -107,4 +107,3 @@ class TestSimpleComposites:
             s.with_default_any(6)
 
         assert s.validate_any(8) == Ok(8)
-

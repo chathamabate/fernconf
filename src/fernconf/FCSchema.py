@@ -234,7 +234,7 @@ class FCSchemaBool(FCSchema):
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
         return translator.definition(prefix, cast(bool, value))
 
-FCS_BOOL = FCSchemaBool()
+FCS_BOOL: FCSchema = FCSchemaBool()
 
 class FCSchemaInt(FCSchema):
     @override 
@@ -250,7 +250,7 @@ class FCSchemaInt(FCSchema):
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
         return translator.definition(prefix, cast(int, value))
 
-FCS_INT = FCSchemaInt()
+FCS_INT: FCSchema = FCSchemaInt()
 
 class FCSchemaStr(FCSchema):
     @override 
@@ -264,7 +264,7 @@ class FCSchemaStr(FCSchema):
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
         return translator.definition(prefix, cast(str, value))
 
-FCS_STR = FCSchemaStr()
+FCS_STR: FCSchema = FCSchemaStr()
 
 #
 # Standard Composites
@@ -362,10 +362,47 @@ class FCSchemaStruct(FCSchema):
     def default(self) -> Result[FCValue, str]:
         return self.default_result 
 
+    def validate_list(self, value: list[FCValue]) -> Result[FCvalue, str]:
+        """
+        Here given values must be in the same order as `self.fields`.
+        If fields are missing at the end, they'll be attempted to be filled in with defaults.
+        """
+        if len(value) > len(self.fields):
+            return Err(f"Too many fields provided: {len(value)} (expected={len(self.fields)})")
+ 
+        new_value = []
+        for i in range(len(value)):
+            field_name, schema = self.fields[i]
+            field_res = schema.validate(value[i])
+
+            if field_res.is_err():
+                return field_res.map_err(lambda msg: f"Failure @ field \"{field_name}\": {msg}")
+
+            new_value.append(field_res.unwrap())
+
+        for i in range(len(value), len(self.fields)):
+            field_name, schema = self.fields[i]
+            dv_res = schema.default()
+
+            if dv_res.is_err():
+                return Err(f"Field {field_name} must be specified")
+
+            new_value.append(dv_res.unwrap())
+
+        return Ok(new_value)
+
+    def validate_dict(self, value: dict[str, FCValue]) -> Result[FCValue, str]:
+        pass
+
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
-        # Uhmmmm, now what? IDEK.... Uhhhh, maybe some bullshit?
-        return Err("ah")
+        match value:
+            case list():
+                return self.validate_list(cast(list[FCValue], value))
+            case dict():
+                return self.validate_dict(cast(dict[str, FCValue], value))
+            case _:
+                return Err("Struct must either be specified as a list or dict")
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
