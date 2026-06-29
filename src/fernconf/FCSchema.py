@@ -335,7 +335,7 @@ class FCSchemaStruct(FCSchema):
         if len(fields) == 0:
             raise Exception("An FCSchemaStruct cannot be empty!")
         
-        self.fields = fields
+        self.field_order = [field[0] for field in fields]
         self.fields_dict: dict[str, FCSchema] = {}
 
         # We will try to generate a single default value here!
@@ -362,36 +362,42 @@ class FCSchemaStruct(FCSchema):
     def default(self) -> Result[FCValue, str]:
         return self.default_result 
 
-    def validate_list(self, value: list[FCValue]) -> Result[FCvalue, str]:
+    def validate_list(self, value: list[FCValue]) -> Result[FCValue, str]:
         """
         Here given values must be in the same order as `self.fields`.
         If fields are missing at the end, they'll be attempted to be filled in with defaults.
         """
-        if len(value) > len(self.fields):
-            return Err(f"Too many fields provided: {len(value)} (expected={len(self.fields)})")
+        if len(value) > len(self.field_order):
+            return Err(f"Too many fields provided: {len(value)} (expected={len(self.field_order)})")
  
-        new_value = []
+        new_value = {}
         for i in range(len(value)):
-            field_name, schema = self.fields[i]
+            field_name = self.field_order[i]
+            schema = self.fields_dict[field_name]
             field_res = schema.validate(value[i])
 
             if field_res.is_err():
                 return field_res.map_err(lambda msg: f"Failure @ field \"{field_name}\": {msg}")
 
-            new_value.append(field_res.unwrap())
+            new_value[field_name] = field_res.unwrap()
 
-        for i in range(len(value), len(self.fields)):
-            field_name, schema = self.fields[i]
+        for i in range(len(value), len(self.field_order)):
+            field_name = self.field_order[i]
+            schema = self.fields_dict[field_name]
             dv_res = schema.default()
 
             if dv_res.is_err():
                 return Err(f"Field {field_name} must be specified")
 
-            new_value.append(dv_res.unwrap())
+            new_value[field_name] = dv_res.unwrap()
 
         return Ok(new_value)
 
     def validate_dict(self, value: dict[str, FCValue]) -> Result[FCValue, str]:
+        """
+        Here we just make sure all requred values are present and valid.
+        Missing fields being populated with defaults.
+        """
         pass
 
     @override 
