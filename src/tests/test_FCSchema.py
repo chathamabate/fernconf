@@ -107,3 +107,37 @@ class TestSimpleComposites:
             s.with_default_any(6)
 
         assert s.validate_any(8) == Ok(8)
+
+class TestStandardComposites:
+    def test_schema_strict_list(self) -> None:
+        s = FCSchemaStrictList(FCS_INT)
+        assert s.validate_any([]) == Ok([])
+        assert s.validate_any([1, 2, 3]) == Ok([1, 2, 3])
+        assert s.validate_any([1, 2, "hello"]).is_err()
+
+        # Just make sure a simple translate doesn't explode.
+        val_res = s.validate_any([1, 2, 5])
+        assert val_res.is_ok()
+        s.translate("MY_ARR", val_res.unwrap(), FCT_CLANG)
+
+        with pytest.raises(Exception):
+            FCSchemaStrictList(FCS_INT, 10, 1)
+
+        s = FCSchemaStrictList(FCS_INT, 3, 5)
+        assert s.validate_any([1, 2]).is_err()
+        assert s.validate_any([1, 2, 3]) == Ok([1, 2, 3])
+        assert s.validate_any([1, 2, 3, 4]) == Ok([1, 2, 3, 4])
+        assert s.validate_any([1, 2, 3, 4, 5]) == Ok([1, 2, 3, 4, 5])
+        assert s.validate_any([1, 2, 3, 4, 5, 6]).is_err()
+
+        s = FCSchemaStrictList(FCS_STR, 1, 1)
+        assert s.validate_any([]).is_err()
+        assert s.validate_any(["H"]) == Ok(["H"])
+        assert s.validate_any(["H", "T"]).is_err()
+
+        s = FCSchemaStrictList(FCS_STR, 1, 0)
+        assert s.validate_any([]).is_err()
+        assert s.validate_any(["H"]) == Ok(["H"])
+        assert s.validate_any(["H", "T"]) == Ok(["H", "T"])
+
+
