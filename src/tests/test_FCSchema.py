@@ -242,7 +242,42 @@ class TestBigComposites:
         assert s.validate_any(["Mexico", [["MC", -1]]]).is_err()
 
     def test_big_schema1(self) -> None:
-        # Maybe now with a default??
-        # That would be cool right?
-        pass
+        sr = FCSchemaStrictList(FCS_INT, 2, 2).with_extra_checks(
+            range_check=lambda v: Ok(None) if v[0] <= v[1] else Err("invalid bounds")
+        ).with_default_any([0, 0])
+
+        s = FCSchemaStruct([
+            ("x_intervals", FCSchemaStrictList(sr).with_default_any([])),
+            ("y_intervals", FCSchemaStrictList(sr).with_default_any([]))
+        ])
+
+        assert s.default() == Ok({
+            "x_intervals": [],
+            "y_intervals": []
+        })
+
+        assert s.validate_any([
+            [[]],
+        ]).is_err()
+
+        assert s.validate_any([
+            [[1, 2]],
+        ]) == Ok({
+            "x_intervals": [[1, 2]],
+            "y_intervals": []
+        })
+
+        assert s.validate_any([
+            [[1, 3]],
+            [[2, 3], [4, 5], [6, 5]]
+        ]).is_err()
+
+        assert s.validate_any({
+            "x_intervals": [],
+            "y_intervals": [[1, 2]]
+        }) == Ok({
+            "x_intervals": [],
+            "y_intervals": [[1, 2]]
+        })
+
 
