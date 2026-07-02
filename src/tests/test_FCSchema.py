@@ -140,4 +140,39 @@ class TestStandardComposites:
         assert s.validate_any(["H"]) == Ok(["H"])
         assert s.validate_any(["H", "T"]) == Ok(["H", "T"])
 
+    def test_schema_struct(self) -> None:
+        # A struct schema must have 1 or more fields.
+        with pytest.raises(Exception):
+            FCSchemaStruct([])
+
+        with pytest.raises(Exception):
+            FCSchemaStruct([
+                ("  ", FCS_INT) # Invalid field name.
+            ])
+
+        with pytest.raises(Exception):
+            FCSchemaStruct([
+                ("a", FCS_INT),
+                ("a", FCS_INT) # Repeat field name.
+            ])
+
+        s = FCSchemaStruct([
+            ("name", FCS_STR),
+            ("age", FCS_INT.with_default_any(20))
+        ])
+        
+        # List style struct values.
+        assert s.validate_any(["bob", 12]) == Ok({"name": "bob", "age": 12})
+        assert s.validate_any(["bob"]) == Ok({"name": "bob", "age": 20})
+        assert s.validate_any([]).is_err() # No default name!
+        assert s.default().is_err()
+
+        assert s.validate_any([1]).is_err()
+        assert s.validate_any(["bob", "smith"]).is_err()
+        assert s.validate_any([10, 10]).is_err()
+
+        # Dict style struct values.
+        assert s.validate_any()
+
+
 
