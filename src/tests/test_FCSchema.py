@@ -217,14 +217,16 @@ class TestBigComposites:
             ))
         ])
 
-        assert s.validate_any({
+        rv = s.validate_any({
             "area_name": "New Jersey",
             "cities": [
                 ["SmithVille", 1000],
                 ["ML", 4000],
                 {"location": "Boonton", "population": 5000},
             ]
-        }) == Ok({
+        }) 
+
+        assert rv == Ok({
             "area_name": "New Jersey",
             "cities": [
                 {"location": "SmithVille", "population": 1000},
@@ -232,6 +234,7 @@ class TestBigComposites:
                 {"location": "Boonton", "population": 5000},
             ]
         })
+        s.translate("FC", rv.unwrap(), FCT_CLANG)
 
         assert s.default().is_err()
         assert s.validate_any(["Cali", []]) == Ok({
@@ -272,12 +275,15 @@ class TestBigComposites:
             [[2, 3], [4, 5], [6, 5]]
         ]).is_err()
 
-        assert s.validate_any({
+        rv = s.validate_any({
             "x_intervals": [],
             "y_intervals": [[1, 2]]
-        }) == Ok({
+        }) 
+
+        assert rv == Ok({
             "x_intervals": [],
             "y_intervals": [[1, 2]]
         })
+        s.translate("FC", rv.unwrap(), FCT_CLANG)
 
 
