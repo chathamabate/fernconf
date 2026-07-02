@@ -243,7 +243,7 @@ class TestBigComposites:
 
     def test_big_schema1(self) -> None:
         sr = FCSchemaStrictList(FCS_INT, 2, 2).with_extra_checks(
-            range_check=lambda v: Ok(None) if v[0] <= v[1] else Err("invalid bounds")
+            range_check=lambda v: Ok(None) if cast(list[int], v)[0] <= cast(list[int], v)[1] else Err("invalid bounds")
         ).with_default_any([0, 0])
 
         s = FCSchemaStruct([
