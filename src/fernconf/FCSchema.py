@@ -423,6 +423,10 @@ class FCSchemaStruct(FCSchema):
 
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
+        """
+        While both list or dict FCValues are accepted by this function, only a dict is ever 
+        returned!
+        """
         match value:
             case list():
                 return self.validate_list(cast(list[FCValue], value))
@@ -433,5 +437,15 @@ class FCSchemaStruct(FCSchema):
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
-        return []
+        """
+        NOTE: as it is requred that `value` be validated before being passed into this function,
+        we know with certainty that `value` is of type dict[str, FCValue].
+        """
+        lines = []
+
+        dict_val = cast(dict[str, FCValue], value)
+        for name, ele_schema in self.fields_dict.items():
+            lines += ele_schema.translate(prefix + "_" + name, dict_val[name], translator)
+
+        return lines
 
