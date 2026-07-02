@@ -398,7 +398,28 @@ class FCSchemaStruct(FCSchema):
         Here we just make sure all requred values are present and valid.
         Missing fields being populated with defaults.
         """
-        pass
+        new_value = {}
+        for name, field_value in value.items():
+            if name not in self.fields_dict:
+                return Err(f"Field {name} is unknown")
+            field_res = self.fields_dict[name].validate(field_value)
+
+            if field_res.is_err():
+                return field_res.map_err(lambda msg: f"Error @ field \"{name}\": {msg}")
+
+            new_value[name] = field_res.unwrap()
+
+        # Now for defaults.
+        for name, schema in self.fields_dict.items():
+            if name not in new_value:
+                dv_res = schema.default()
+
+                if dv_res.is_err():
+                    return dv_res.map_err(lambda msg: f"Error @ field \"{name}\": {msg}")
+
+                new_value[name] = dv_res.unwrap()
+
+        return Ok(new_value)
 
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
