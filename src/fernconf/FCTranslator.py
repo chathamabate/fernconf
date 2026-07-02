@@ -18,7 +18,7 @@ class FCTranslator(ABC):
     """
 
     @abstractmethod
-    def comment(self, message: list[str], docstring: bool=False) -> list[str]:
+    def comment(self, message: list[str]) -> list[str]:
         """
         Create a comment in the target format.
         Each element in `message` represents a single line of the comment message.
@@ -31,32 +31,26 @@ class FCTranslator(ABC):
     def _definition(self, value_name: str, value: str | bool | int) -> list[str]:
         pass
 
-    def definition(self, value_name: str, value: str | bool | int, docstring: list[str] | None=None) -> list[str]:
+    def definition(self, value_name: str, value: str | bool | int) -> list[str]:
         """
         Create a definition in the target format!
 
         If `value_name` does not follow FC_ID_PATTERN, an exception will be thrown.
         
         Note that `value_name` must appear EXACTLY as is in the output definition.
-        `docstring` should be a list of the lines of the docstring (with NO NEWLINE CHARACTERS).
-        The returned string can also span multiple lines!
         """
         if not FC_ID_PATTERN.fullmatch(value_name):
             # Note that this does not return a result. If we make it here, the implementor
             # made a mistake (not the user). 
             raise Exception(f"value name did not follow FC ID regex format: \"{value_name}\"")
 
-        def_lines = []
-        if docstring is not None:
-            def_lines += self.comment(docstring, True)
-
-        return def_lines + self._definition(value_name, value)
+        return self._definition(value_name, value)
 
 
 class FCTranslatorCLang(FCTranslator):
     @override
-    def comment(self, message: list[str], docstring: bool=False) -> list[str]:
-        return (["/**"] if docstring else ["/*"]) + [" * " + line for line in message] + [" */"]
+    def comment(self, message: list[str]) -> list[str]:
+        return ["/*"] + [" * " + line for line in message] + [" */"]
 
     @override
     def _definition(self, value_name: str, value: str | bool | int) -> list[str]:
