@@ -61,6 +61,15 @@ class TestSimpleComposites:
             s.with_description([])
 
     def test_with_comment(self) -> None:
+        # It's kinda difficult to really test with comment, so we just make sure translate
+        # doesn't explode.
+        s = FCS_STR.with_comment(["hello"])
+        s.translate("MY_VAL", "hello", FCT_CLANG)
+
+        s = s.with_comment(["anotha"])
+        s.translate("MY_VAL", "aye yo", FCT_CLANG)
+
+    def test_with_default(self) -> None:
         s = FCS_INT
         assert s.default().is_err()
 
@@ -172,7 +181,68 @@ class TestStandardComposites:
         assert s.validate_any([10, 10]).is_err()
 
         # Dict style struct values.
-        assert s.validate_any()
+        assert s.validate_any({"name": "bob", "age": 70}) == Ok({"name": "bob", "age": 70})
+        assert s.validate_any({"name": "bob"}) == Ok({"name": "bob", "age": 20})
+        assert s.validate_any({}).is_err()
 
+        assert s.validate_any({"name": 12}).is_err()
+        
+        rv = s.validate_any(["bob", 16])
+        assert rv.is_ok()
+        s.translate("", rv.unwrap(), FCT_CLANG) # Simple translate check!
 
+        # Let's just test out a full default, why not!
+        s = FCSchemaStruct([
+            ("v", FCS_INT.with_default_any(1)),
+            ("p", FCS_INT.with_default_any(2)),
+            ("r", FCS_INT.with_default_any(3))
+        ])
+
+        assert s.default() == Ok({"v": 1, "p": 2, "r": 3})
+
+class TestBigComposites:
+    """
+    Kinda just misc tests with big ass schema.
+    """
+    def test_big_schema0(self) -> None:
+        s = FCSchemaStruct([
+            ("area_name", FCS_STR),
+            ("cities", FCSchemaStrictList(
+                FCSchemaStruct([
+                    ("location", FCS_STR),
+                    ("population", FCS_INT.with_extra_checks(
+                        not_empty=lambda pop: Ok(None) if cast(int, pop) > 0 else Err("value must be positive non-zero")
+                    ))
+                ])
+            ))
+        ])
+
+        assert s.validate_any({
+            "area_name": "New Jersey",
+            "cities": [
+                ["SmithVille", 1000],
+                ["ML", 4000],
+                {"location": "Boonton", "population": 5000},
+            ]
+        }) == Ok({
+            "area_name": "New Jersey",
+            "cities": [
+                {"location": "SmithVille", "population": 1000},
+                {"location": "ML", "population": 4000},
+                {"location": "Boonton", "population": 5000},
+            ]
+        })
+
+        assert s.default().is_err()
+        assert s.validate_any(["Cali", []]) == Ok({
+            "area_name": "Cali",
+            "cities": []
+        })
+
+        assert s.validate_any(["Mexico", [["MC", -1]]]).is_err()
+
+    def test_big_schema1(self) -> None:
+        # Maybe now with a default??
+        # That would be cool right?
+        pass
 

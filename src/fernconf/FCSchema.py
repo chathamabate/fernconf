@@ -321,7 +321,7 @@ class FCSchemaStrictList(FCSchema):
         return output_lines
 
 class FCSchemaStruct(FCSchema):
-    def __init__(self, fields: list[tuple[str, FCSchema]], desc: str | None=None):
+    def __init__(self, fields: list[tuple[str, FCSchema]]):
         """
         A Struct is just an ordered list of named values.
 
