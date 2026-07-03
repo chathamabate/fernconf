@@ -43,19 +43,6 @@ class TestSimpleComposites:
     These will be tested more with the standard composites test.
     """
 
-    def test_with_description(self) -> None:
-        # Like "with comment" it's kinda hard to test this without knowing exactly how
-        # descriptions are concatenated. So, here we just make sure calling `descritpion()`
-        # doesn't throw some exception.
-        s = FCS_STR
-        s.description()
-
-        s = s.with_description(["A desc"])
-        s.description()
-
-        s = s.with_description(["A desc", "again"])
-        s.description()
-
     def test_with_comment(self) -> None:
         # It's kinda difficult to really test with comment, so we just make sure translate
         # doesn't explode.
@@ -115,7 +102,7 @@ class TestSimpleComposites:
 
 class TestStandardComposites:
     def test_schema_strict_list(self) -> None:
-        s = FCSchemaStrictList(FCS_INT.with_description(["A normal int"])).with_description(["An array"])
+        s = FCSchemaStrictList(FCS_INT)
         assert s.validate_any([]) == Ok([])
         assert s.validate_any([1, 2, 3]) == Ok([1, 2, 3])
         assert s.validate_any([1, 2, "hello"]).is_err()
@@ -124,7 +111,6 @@ class TestStandardComposites:
         val_res = s.validate_any([1, 2, 5])
         assert val_res.is_ok()
         s.translate("MY_ARR", val_res.unwrap(), FCT_CLANG)
-        s.description()
 
         with pytest.raises(Exception):
             FCSchemaStrictList(FCS_INT, 10, 1)
@@ -163,9 +149,9 @@ class TestStandardComposites:
             ])
 
         s = FCSchemaStruct([
-            ("name", FCS_STR.with_description(["Person name"])),
-            ("age", FCS_INT.with_default_any(20).with_description(["Person Age"]))
-        ]).with_description(["A person"])
+            ("name", FCS_STR),
+            ("age", FCS_INT.with_default_any(20))
+        ])
         
         # List style struct values.
         assert s.validate_any(["bob", 12]) == Ok({"name": "bob", "age": 12})
@@ -187,7 +173,6 @@ class TestStandardComposites:
         rv = s.validate_any(["bob", 16])
         assert rv.is_ok()
         s.translate("", rv.unwrap(), FCT_CLANG) # Simple translate check!
-        s.description()
 
         # Let's just test out a full default, why not!
         s = FCSchemaStruct([
@@ -213,7 +198,7 @@ class TestBigComposites:
                     ))
                 ])
             ))
-        ]).with_description(["A record describing a certain area"])
+        ])
 
         rv = s.validate_any({
             "area_name": "New Jersey",
