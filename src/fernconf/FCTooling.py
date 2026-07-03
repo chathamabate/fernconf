@@ -6,7 +6,7 @@ from fernconf.FCSchema import *
 
 import argparse as ap
 
-import pathtype as pt # type: ignore
+import pathtype as pt # type: ignore[import-untyped]
 
 def run(schema: FCSchema, **translators: FCTranslator) -> None:
     """
