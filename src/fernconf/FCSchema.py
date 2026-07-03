@@ -15,20 +15,6 @@ class FCSchema(ABC):
     def __init__(self):
         pass
 
-    def description(self) -> list[str]:
-        """
-        A Schema can specify a description. 
-
-        This is NOT reflected in the output definitions in any way!
-
-        This should return a pointer to a NEW list! Unlike FCValue's, this is just a normal
-        mutable python list!
-        """
-        return []
-
-    def with_description(self, desc: list[str]) -> FCSchema:
-        return FCSchemaWithDescription(self, desc)
-
     def with_comment(self, comment: list[str]) -> FCSchema:
         """
         Adding a comment is *like* adding a description, however this is only seen in output
@@ -113,10 +99,6 @@ class FCSchemaWrapper(FCSchema):
         self.inner = inner
 
     @override
-    def description(self) -> list[str]:
-        return self.inner.description()
-
-    @override
     def default(self) -> Result[FCValue, str]:
         return self.inner.default()
 
@@ -131,23 +113,6 @@ class FCSchemaWrapper(FCSchema):
 #
 # Essential Composites
 #
-
-class FCSchemaWithDescription(FCSchemaWrapper):
-    def __init__(self, inner: FCSchema, desc: list[str]):
-        super().__init__(inner)
-
-        if len(desc) == 0:
-            raise Exception("Description cannot be empty!")
-
-        self.desc = desc[:]
-
-    @override
-    def description(self) -> list[str]:
-        output_desc = self.desc[:]
-        inner_desc = super().description()
-        if len(inner_desc) > 0:
-            output_desc += [""] + inner_desc
-        return output_desc
 
 class FCSchemaWithComment(FCSchemaWrapper):
     def __init__(self, inner: FCSchema, comment: list[str]):
@@ -223,10 +188,6 @@ class FCSchemaWithExtraChecks(FCSchemaWrapper):
 #
 
 class FCSchemaBool(FCSchema):
-    @override
-    def description(self) -> list[str]:
-        return ["BOOL"]
-
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
         if not isinstance(value, bool):
@@ -241,10 +202,6 @@ class FCSchemaBool(FCSchema):
 FCS_BOOL: FCSchema = FCSchemaBool()
 
 class FCSchemaInt(FCSchema):
-    @override
-    def description(self) -> list[str]:
-        return ["INTEGER"]
-
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
         if not isinstance(value, int):
@@ -261,10 +218,6 @@ class FCSchemaInt(FCSchema):
 FCS_INT: FCSchema = FCSchemaInt()
 
 class FCSchemaStr(FCSchema):
-    @override
-    def description(self) -> list[str]:
-        return ["STRING"]
-
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
         if not isinstance(value, str):
@@ -300,16 +253,6 @@ class FCSchemaStrictList(FCSchema):
 
         if min_eles > max_eles and max_eles != 0:
             raise Exception(f"Invalid element count constraints ({str(min_eles)}, {str(max_eles)})")
-
-    @override
-    def description(self) -> list[str]:
-        header = "list[]"
-        if self.min_eles > 0:
-            header += f" min_eles={self.min_eles}"
-        if self.max_eles > 0:
-            header += f" max_eles={self.max_eles}"
-
-        return [header] + ["  " + line for line in self.ele_schema.description()]
 
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
@@ -383,14 +326,6 @@ class FCSchemaStruct(FCSchema):
                     # NOTE: That is totally ok for our struct not to have a default value!
                     self.default_result = Err(f"Struct has no default value, (\"{field}\" is required)")
 
-    @override
-    def description(self) -> list[str]:
-        desc_lines = []
-        for field_name, schema in self.fields_dict.items():
-            desc_lines += [f"[{field_name}]"]
-            desc_lines += ["  " + line for line in schema.description()]
-        return desc_lines
-        
     @override
     def default(self) -> Result[FCValue, str]:
         return self.default_result 
