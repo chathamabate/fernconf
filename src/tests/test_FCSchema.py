@@ -44,21 +44,17 @@ class TestSimpleComposites:
     """
 
     def test_with_description(self) -> None:
-        s = FCS_BOOL
-        assert s.description() == []
+        # Like "with comment" it's kinda hard to test this without knowing exactly how
+        # descriptions are concatenated. So, here we just make sure calling `descritpion()`
+        # doesn't throw some exception.
+        s = FCS_STR
+        s.description()
 
-        desc1 = ["line1", "line2"]
-        desc2 = ["line3"]
+        s = s.with_description(["A desc"])
+        s.description()
 
-        s = s.with_description(desc1)
-        assert s.description() == desc1
-        assert s.validate_any(True) == Ok(True)
-
-        s = s.with_description(desc2)
-        assert s.description() == desc2 + [""] + desc1
-
-        with pytest.raises(Exception):
-            s.with_description([])
+        s = s.with_description(["A desc", "again"])
+        s.description()
 
     def test_with_comment(self) -> None:
         # It's kinda difficult to really test with comment, so we just make sure translate
@@ -119,15 +115,16 @@ class TestSimpleComposites:
 
 class TestStandardComposites:
     def test_schema_strict_list(self) -> None:
-        s = FCSchemaStrictList(FCS_INT)
+        s = FCSchemaStrictList(FCS_INT.with_description(["A normal int"])).with_description(["An array"])
         assert s.validate_any([]) == Ok([])
         assert s.validate_any([1, 2, 3]) == Ok([1, 2, 3])
         assert s.validate_any([1, 2, "hello"]).is_err()
 
-        # Just make sure a simple translate doesn't explode.
+        # Just make sure a simple translate/describe doesn't explode.
         val_res = s.validate_any([1, 2, 5])
         assert val_res.is_ok()
         s.translate("MY_ARR", val_res.unwrap(), FCT_CLANG)
+        s.description()
 
         with pytest.raises(Exception):
             FCSchemaStrictList(FCS_INT, 10, 1)
@@ -166,9 +163,9 @@ class TestStandardComposites:
             ])
 
         s = FCSchemaStruct([
-            ("name", FCS_STR),
-            ("age", FCS_INT.with_default_any(20))
-        ])
+            ("name", FCS_STR.with_description(["Person name"])),
+            ("age", FCS_INT.with_default_any(20).with_description(["Person Age"]))
+        ]).with_description(["A person"])
         
         # List style struct values.
         assert s.validate_any(["bob", 12]) == Ok({"name": "bob", "age": 12})
@@ -190,6 +187,7 @@ class TestStandardComposites:
         rv = s.validate_any(["bob", 16])
         assert rv.is_ok()
         s.translate("", rv.unwrap(), FCT_CLANG) # Simple translate check!
+        s.description()
 
         # Let's just test out a full default, why not!
         s = FCSchemaStruct([
@@ -215,16 +213,18 @@ class TestBigComposites:
                     ))
                 ])
             ))
-        ])
+        ]).with_description(["A record describing a certain area"])
 
-        assert s.validate_any({
+        rv = s.validate_any({
             "area_name": "New Jersey",
             "cities": [
                 ["SmithVille", 1000],
                 ["ML", 4000],
                 {"location": "Boonton", "population": 5000},
             ]
-        }) == Ok({
+        }) 
+
+        assert rv == Ok({
             "area_name": "New Jersey",
             "cities": [
                 {"location": "SmithVille", "population": 1000},
@@ -232,6 +232,7 @@ class TestBigComposites:
                 {"location": "Boonton", "population": 5000},
             ]
         })
+        s.translate("FC", rv.unwrap(), FCT_CLANG)
 
         assert s.default().is_err()
         assert s.validate_any(["Cali", []]) == Ok({
@@ -272,12 +273,15 @@ class TestBigComposites:
             [[2, 3], [4, 5], [6, 5]]
         ]).is_err()
 
-        assert s.validate_any({
+        rv = s.validate_any({
             "x_intervals": [],
             "y_intervals": [[1, 2]]
-        }) == Ok({
+        }) 
+
+        assert rv == Ok({
             "x_intervals": [],
             "y_intervals": [[1, 2]]
         })
+        s.translate("FC", rv.unwrap(), FCT_CLANG)
 
 

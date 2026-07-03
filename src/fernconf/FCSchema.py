@@ -223,6 +223,10 @@ class FCSchemaWithExtraChecks(FCSchemaWrapper):
 #
 
 class FCSchemaBool(FCSchema):
+    @override
+    def description(self) -> list[str]:
+        return ["BOOL"]
+
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
         if not isinstance(value, bool):
@@ -237,6 +241,10 @@ class FCSchemaBool(FCSchema):
 FCS_BOOL: FCSchema = FCSchemaBool()
 
 class FCSchemaInt(FCSchema):
+    @override
+    def description(self) -> list[str]:
+        return ["INTEGER"]
+
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
         if not isinstance(value, int):
@@ -253,6 +261,10 @@ class FCSchemaInt(FCSchema):
 FCS_INT: FCSchema = FCSchemaInt()
 
 class FCSchemaStr(FCSchema):
+    @override
+    def description(self) -> list[str]:
+        return ["STRING"]
+
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
         if not isinstance(value, str):
@@ -283,8 +295,21 @@ class FCSchemaStrictList(FCSchema):
         self.min_eles = min_eles
         self.max_eles = max_eles
 
+        if min_eles < 0 or max_eles < 0:
+            raise Exception("element count constraints cannot be negative")
+
         if min_eles > max_eles and max_eles != 0:
             raise Exception(f"Invalid element count constraints ({str(min_eles)}, {str(max_eles)})")
+
+    @override
+    def description(self) -> list[str]:
+        header = "list[]"
+        if self.min_eles > 0:
+            header += f" min_eles={self.min_eles}"
+        if self.max_eles > 0:
+            header += f" max_eles={self.max_eles}"
+
+        return [header] + ["  " + line for line in self.ele_schema.description()]
 
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
@@ -357,6 +382,14 @@ class FCSchemaStruct(FCSchema):
                 else:
                     # NOTE: That is totally ok for our struct not to have a default value!
                     self.default_result = Err(f"Struct has no default value, (\"{field}\" is required)")
+
+    @override
+    def description(self) -> list[str]:
+        desc_lines = []
+        for field_name, schema in self.fields_dict.items():
+            desc_lines += [f"[{field_name}]"]
+            desc_lines += ["  " + line for line in schema.description()]
+        return desc_lines
         
     @override
     def default(self) -> Result[FCValue, str]:
