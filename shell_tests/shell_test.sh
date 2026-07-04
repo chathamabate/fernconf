@@ -7,4 +7,5 @@ set -e
 
 gt=$(git rev-parse --show-toplevel)
 
-python $gt/shell_tests/SimpleTool.py
+! python $gt/shell_tests/SimpleTool.py
+! echo "hello"
