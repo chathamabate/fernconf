@@ -157,6 +157,7 @@ class TestStandardComposites:
         assert s.validate_any(["bob", 12]) == Ok({"name": "bob", "age": 12})
         assert s.validate_any(["bob"]) == Ok({"name": "bob", "age": 20})
         assert s.validate_any([]).is_err() # No default name!
+        assert s.validate_any(["bob", 12, 14]).is_err() # Too many fields
         assert s.default().is_err()
 
         assert s.validate_any([1]).is_err()
@@ -167,6 +168,7 @@ class TestStandardComposites:
         assert s.validate_any({"name": "bob", "age": 70}) == Ok({"name": "bob", "age": 70})
         assert s.validate_any({"name": "bob"}) == Ok({"name": "bob", "age": 20})
         assert s.validate_any({}).is_err()
+        assert s.validate_any({"name": "bob", "age": 70, "bad": 10}).is_err()
 
         assert s.validate_any({"name": 12}).is_err()
         

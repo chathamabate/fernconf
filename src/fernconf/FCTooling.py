@@ -32,13 +32,13 @@ def run_fernconf(schema: FCSchema, prefix: str="FC", **translators: FCTranslator
         with open(fn, "r") as f:
             data = json.load(f)
     except:
-        print(f"Failed to parse input file {fn}") 
+        print(f"Failed to parse JSON from {fn}") 
         exit(1)
 
-    fcv_res = fcv_of(data)
+    fcv_res = schema.validate_any(data)
 
     if fcv_res.is_err():
-        print(f"Failed to validate input file {fn}")
+        print(f"Failed to parse and validate FCValue from {fn}")
         print(fcv_res.unwrap_err())
         exit(1)
 

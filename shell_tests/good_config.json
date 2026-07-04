@@ -1,0 +1,10 @@
+{
+    "area_name": "NJ",
+    "cities": [
+        {
+            "location": "Newark",
+            "population": 100000
+        },
+        ["Camden", 100000]
+    ]
+}
