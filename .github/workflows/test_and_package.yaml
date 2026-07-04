@@ -36,8 +36,11 @@ jobs:
     - name: Type Check
       run: mypy src
 
-    - name: Test
+    - name: PyTest
       run: pytest
+
+    - name: Shell Test
+      run: shell_tests/shell_test.sh
 
     - name: Package
       run: python -m build

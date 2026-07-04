@@ -12,7 +12,7 @@ import json
 import pathtype as pt # type: ignore[import-untyped]
 import pathlib as pl
 
-def run(schema: FCSchema, prefix: str="FC", **translators: FCTranslator) -> NoReturn:
+def run_fernconf(schema: FCSchema, prefix: str="FC", **translators: FCTranslator) -> NoReturn:
     """
     Run fernconf cli given a schema and supported translators!
     """
