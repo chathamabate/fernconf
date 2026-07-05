@@ -69,10 +69,19 @@ build_dir=$st_dir/build
 rm -rf $build_dir # Make sure this guy doesn't already exist!
 mkdir -p $build_dir
 
+# This a kinda cool adhoc shell testing frameowrk I have written!
+
+fail() {
+    echo -e "${RED}FAILURE${RESET}"
+    exit 1
+}
+
+test_header() {
+    echo -e "Test        : ${BOLD}$1${RESET}"
+}
+
 expect_succeed() {
-    echo -e "Trying    : ${BOLD}$1${RESET} ${BRIGHT_BLACK}(Should Succeed)${RESET}"
-    shift
-    echo -e "Executing : ${BRIGHT_BLACK}$*${RESET}"
+    echo -e "Expect Pass : ${BRIGHT_BLACK}$*${RESET}"
 
     echo -n -e "${RED}"
     $*
@@ -80,28 +89,28 @@ expect_succeed() {
     echo -n -e "${RESET}"
 
     if ! [ $result -eq 0 ]; then
-        echo -e "${RED}FAILURE${RESET}"
-        exit 1
+        fail
     fi
     return 0
 }
 
 expect_fail() {
-    echo -e "Trying    : ${BOLD}$1${RESET} ${BRIGHT_BLACK}(Should Fail)${RESET}"
-    shift
-    echo -e "Executing : ${BRIGHT_BLACK}$*${RESET}"
+    echo -e "Expect ${BRIGHT_BLACK}Fail${RESET} : ${BRIGHT_BLACK}$*${RESET}"
 
     ($*) > /dev/null
 
     if [ $? -eq 0 ]; then
-        echo -e "${RED}FAILURE${RESET}"
-        exit 1
+        echo -e "${RED}Command unexpectedly succeeded${RESET}"
+        fail
     fi
     return 0
 }
 
-expect_succeed "Basic Validate" python $tool $good_config
-expect_fail "Basic Fail" python $tool $good_config
+test_header "Basic Validate"
+expect_succeed python $tool $good_config
+
+test_header "Basic Fail"
+expect_fail python $tool $good_config
 
 echo -e "\n${BOLD}SUCCESS${RESET} ${BRIGHT_BLACK}(Cleaning Up)${RESET}"
 
