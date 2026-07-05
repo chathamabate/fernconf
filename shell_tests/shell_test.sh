@@ -10,54 +10,6 @@
 # Also, this test operates under the assumption that output is only printed on error!
 # Which currently is the case for `run_fernconf`
 
-if [[ -t 1 ]]; then
-    # Regular colors
-    BLACK='\033[0;30m'
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[0;33m'
-    BLUE='\033[0;34m'
-    MAGENTA='\033[0;35m'
-    CYAN='\033[0;36m'
-    WHITE='\033[0;37m'
-    
-    # Bright colors
-    BRIGHT_BLACK='\033[0;90m'   # Gray
-    BRIGHT_RED='\033[0;91m'
-    BRIGHT_GREEN='\033[0;92m'
-    BRIGHT_YELLOW='\033[0;93m'
-    BRIGHT_BLUE='\033[0;94m'
-    BRIGHT_MAGENTA='\033[0;95m'
-    BRIGHT_CYAN='\033[0;96m'
-    BRIGHT_WHITE='\033[0;97m'
-
-    BOLD='\033[1m'
-    RESET='\033[0m'
-else
-    # All variables empty if not a TTY
-    BLACK=''
-    RED=''
-    GREEN=''
-    YELLOW=''
-    BLUE=''
-    MAGENTA=''
-    CYAN=''
-    WHITE=''
-    
-    # Bright colors
-    BRIGHT_BLACK=''   
-    BRIGHT_RED=''
-    BRIGHT_GREEN=''
-    BRIGHT_YELLOW=''
-    BRIGHT_BLUE=''
-    BRIGHT_MAGENTA=''
-    BRIGHT_CYAN=''
-    BRIGHT_WHITE=''
-
-    BOLD=''
-    RESET=''
-fi
-
 gt=$(git rev-parse --show-toplevel)
 st_dir=$gt/shell_tests
 tool=$st_dir/SimpleTool.py
@@ -66,53 +18,36 @@ bad_config=$st_dir/bad_config.json
 
 build_dir=$st_dir/build
 
+. $st_dir/shell_test_helpers.sh
+
 rm -rf $build_dir # Make sure this guy doesn't already exist!
 mkdir -p $build_dir
 
 # This a kinda cool adhoc shell testing frameowrk I have written!
 
-fail() {
-    echo -e "${RED}FAILURE${RESET}"
-    exit 1
-}
 
-test_header() {
-    echo -e "Test        : ${BOLD}$1${RESET}"
-}
+# Ok, now actual tests! Pretty minimal, but whatever.
 
-expect_succeed() {
-    echo -e "Expect Pass : ${BRIGHT_BLACK}$*${RESET}"
-
-    echo -n -e "${RED}"
-    $*
-    local result=$?
-    echo -n -e "${RESET}"
-
-    if ! [ $result -eq 0 ]; then
-        fail
-    fi
-    return 0
-}
-
-expect_fail() {
-    echo -e "Expect ${BRIGHT_BLACK}Fail${RESET} : ${BRIGHT_BLACK}$*${RESET}"
-
-    ($*) > /dev/null
-
-    if [ $? -eq 0 ]; then
-        echo -e "${RED}Command unexpectedly succeeded${RESET}"
-        fail
-    fi
-    return 0
-}
-
-test_header "Basic Validate"
+test_header "Validate Correct Value"
 expect_succeed python $tool $good_config
+echo
 
-test_header "Basic Fail"
-expect_fail python $tool $good_config
+test_header "Validate and Translate"
+expect_succeed python $tool -f clang -o $build_dir/out.h $good_config
+expect_succeed test -f $build_dir/out.h # here we really just want to make sure a file was created.
+echo
 
-echo -e "\n${BOLD}SUCCESS${RESET} ${BRIGHT_BLACK}(Cleaning Up)${RESET}"
+test_header "Validate Incorrect Value"
+expect_fail python $tool $bad_config
+echo
+
+test_header "Bad Args"
+expect_fail python $tool # No file given!
+expect_fail python $tool ./non-existent-file.json # File doesn't exist
+expect_fail python $tool -f bad_translator $good_config
+echo
+
+echo -e "${BOLD}SUCCESS${RESET} ${BRIGHT_BLACK}(Cleaning Up)${RESET}"
 
 # Cleanup at end on success!
 rm -rf $build_dir
