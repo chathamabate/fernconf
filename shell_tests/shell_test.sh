@@ -101,7 +101,7 @@ expect_fail() {
 }
 
 expect_succeed "Basic Validate" python $tool $good_config
-expect_fail "Basic Fail" python $tool $bad_config
+expect_fail "Basic Fail" python $tool $good_config
 
 echo -e "\n${BOLD}SUCCESS${RESET} ${BRIGHT_BLACK}(Cleaning Up)${RESET}"
 
