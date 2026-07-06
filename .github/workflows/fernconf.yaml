@@ -12,8 +12,24 @@ jobs:
     with:
       upload: true
 
+  release:
+    name: Github Release
+    needs: upload
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download Dist
+      uses: actions/download-artifact@v8
+      with:
+        name: dist
+        path: dist/
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v3
+      with:
+        files: ./dist/*
+
   publish:
-    name: Publish
+    name: PyPI Publish
     needs: upload
     runs-on: ubuntu-latest
     permissions:
