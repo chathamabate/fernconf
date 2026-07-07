@@ -72,3 +72,25 @@ class FCTranslatorCLang(FCTranslator):
 
 FCT_CLANG = FCTranslatorCLang()
 
+class FCTranslatorMake(FCTranslator):
+    @override
+    def comment(self, message: list[str]) -> list[str]:
+        return ["#  " + line for line in message]
+
+    @override
+    def _definition(self, value_name: str, value: str | bool | int) -> list[str]:
+        match value:
+            case str():
+                return [f"{value_name}:={value}"]
+            case bool():
+                return [f"{value_name}:={'y' if value else 'n'}"] # y/n in Make!
+            case int():
+                if value < 0:
+                    return [f"{value}:={str(value)}"]
+
+                return [f"{value_name}:=0x{value:X}"]
+                
+            case _:
+                raise Exception(f"Can't define given value \"{value_name}\"")
+
+FCT_MAKE = FCTranslatorMake()
