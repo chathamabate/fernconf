@@ -94,3 +94,4 @@ class FCTranslatorMake(FCTranslator):
                 raise Exception(f"Can't define given value \"{value_name}\"")
 
 FCT_MAKE = FCTranslatorMake()
+
