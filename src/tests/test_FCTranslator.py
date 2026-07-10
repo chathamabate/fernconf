@@ -18,5 +18,8 @@ def try_FCTranslator(translator: FCTranslator) -> None:
 def test_clang_translator():
     try_FCTranslator(FCT_CLANG)
 
+def test_ld_translator():
+    try_FCTranslator(FCT_LD32)
+
 def test_make_translator():
     try_FCTranslator(FCT_MAKE)
