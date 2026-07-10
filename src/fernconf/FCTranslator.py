@@ -27,9 +27,14 @@ class FCTranslator(ABC):
         """
         pass
 
-    @abstractmethod
-    def _definition(self, value_name: str, value: str | bool | int) -> list[str]:
-        pass
+    def _definition_str(self, value_name: str, value: str) -> list[str]:
+        return []
+
+    def _definition_bool(self, value_name: str, value: bool) -> list[str]:
+        return []
+
+    def _definition_int(self, value_name: str, value: int) -> list[str]:
+        return []
 
     def definition(self, value_name: str, value: str | bool | int) -> list[str]:
         """
@@ -44,7 +49,18 @@ class FCTranslator(ABC):
             # made a mistake (not the user). 
             raise Exception(f"value name did not follow FC ID regex format: \"{value_name}\"")
 
-        return self._definition(value_name, value)
+        match value:
+            case str():
+                return self._definition_str(value_name, value)
+
+            case bool():
+                return self._definition_bool(value_name, value)
+
+            case int():
+                return self._definition_int(value_name, value)
+                
+            case _:
+                raise Exception(f"Can't define given value \"{value_name}\", unexpected type")
 
 
 class FCTranslatorCLang(FCTranslator):
@@ -71,6 +87,35 @@ class FCTranslatorCLang(FCTranslator):
                 raise Exception(f"Can't define given value \"{value_name}\"")
 
 FCT_CLANG = FCTranslatorCLang()
+
+class FCTranslatorLD32(FCTranslator):
+    """
+    This is kinda unique, this if for linker scirpts for 32-bit binaries.
+    It uses C preprocessor directives though, declaring actual integer style variables in 
+    linkerscripts will create a symbol in the binary! 
+    """
+
+    @override
+    def comment(self, message: list[str]) -> list[str]:
+        return ["/*"] + [" * " + line for line in message] + [" */"]
+
+    @override
+    def _definition(self, value_name: str, value: str | bool | int) -> list[str]:
+        match value:
+            case str():
+                return [f"#define {value_name} \"{value}\""]
+            case bool():
+                return [("" if value else "// ") + f"#define {value_name}"]
+            case int():
+                if value < 0:
+                    neg_suffix = "LL" if value < -0x8000_0000 else "L"
+                    return [f"#define {value_name} ({str(value)}{neg_suffix})"]
+                
+                pos_suffix = "ULL" if value > 0xFFFF_FFFF else "UL"
+                return [f"#define {value_name} (0x{value:X}{pos_suffix})"]
+                
+            case _:
+                raise Exception(f"Can't define given value \"{value_name}\"")
 
 class FCTranslatorMake(FCTranslator):
     @override
