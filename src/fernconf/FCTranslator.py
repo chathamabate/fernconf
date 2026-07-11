@@ -62,8 +62,11 @@ class FCTranslator(ABC):
             case _:
                 raise Exception(f"Can't define given value \"{value_name}\", unexpected type")
 
+class FCTranslatorGCC(FCTranslator):
+    """
+    This defines C preprocessor macros for ALL value types!
+    """
 
-class FCTranslatorCLang(FCTranslator):
     @override
     def comment(self, message: list[str]) -> list[str]:
         return ["/*"] + [" * " + line for line in message] + [" */"]
@@ -85,7 +88,38 @@ class FCTranslatorCLang(FCTranslator):
         pos_suffix = "ULL" if value > 0xFFFF_FFFF else "UL"
         return [f"#define {value_name} (0x{value:X}{pos_suffix})"]
 
-FCT_CLANG = FCTranslatorCLang()
+FCT_GCC = FCTranslatorGCC()
+
+class FCTranslatorGAS(FCTranslator):
+    """
+    This defines C preprocessor type macros also for ALL value types!
+
+    However, numbers are not given length suffixes like in C.
+
+    This output is meant to be used for .S gnu assembly files which are first put through 
+    the preprocessor.
+    """
+
+    @override
+    def comment(self, message: list[str]) -> list[str]:
+        return ["/*"] + [" * " + line for line in message] + [" */"]
+
+    @override
+    def _definition_str(self, value_name: str, value: str) -> list[str]:
+        return [f"#define {value_name} \"{value}\""]
+
+    @override
+    def _definition_bool(self, value_name: str, value: bool) -> list[str]:
+        return [("" if value else "// ") + f"#define {value_name}"]
+
+    @override
+    def _definition_int(self, value_name: str, value: int) -> list[str]:
+        if value < 0:
+            return [f"#define {value_name} {str(value)}"]
+        
+        return [f"#define {value_name} 0x{value:X}"]
+
+FCT_GAS = FCTranslatorGAS()
 
 class FCTranslatorLD32(FCTranslator):
     """

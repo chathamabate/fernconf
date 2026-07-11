@@ -33,7 +33,7 @@ expect_succeed python $tool $good_config
 echo
 
 test_header "Validate and Translate"
-expect_succeed python $tool -f clang -o $build_dir/out.h $good_config
+expect_succeed python $tool -f gcc -o $build_dir/out.h $good_config
 expect_succeed test -f $build_dir/out.h # here we really just want to make sure a file was created.
 echo
 

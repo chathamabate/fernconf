@@ -16,6 +16,6 @@ simple_schema = FCSchemaStruct([
 ])
 
 if __name__ == "__main__":
-    run_fernconf(simple_schema, clang=FCT_CLANG)
+    run_fernconf(simple_schema, gcc=FCT_GCC, make=FCT_MAKE, ld=FCT_LD32, gas=FCT_GAS)
 
 

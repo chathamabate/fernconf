@@ -13,7 +13,7 @@ class TestSimpleSchema:
         # Again, for translate, we just make sure no exceptions are thrown!
         v_res = bs.validate_any(True)
         assert v_res.is_ok()
-        bs.translate("BOOL", v_res.unwrap(), FCT_CLANG)
+        bs.translate("BOOL", v_res.unwrap(), FCT_GCC)
 
     def test_schema_int(self) -> None:
         s = FCS_INT
@@ -24,7 +24,7 @@ class TestSimpleSchema:
 
         v_res = s.validate_any(10)
         assert v_res.is_ok()
-        s.translate("INT", v_res.unwrap(), FCT_CLANG)
+        s.translate("INT", v_res.unwrap(), FCT_GCC)
 
     def test_schema_str(self) -> None:
         s = FCS_STR
@@ -35,7 +35,7 @@ class TestSimpleSchema:
 
         v_res = s.validate_any("strval")
         assert v_res.is_ok()
-        s.translate("STR", v_res.unwrap(), FCT_CLANG)
+        s.translate("STR", v_res.unwrap(), FCT_GCC)
 
 class TestSimpleComposites:
     """
@@ -47,10 +47,10 @@ class TestSimpleComposites:
         # It's kinda difficult to really test with comment, so we just make sure translate
         # doesn't explode.
         s = FCS_STR.with_comment(["hello"])
-        s.translate("MY_VAL", "hello", FCT_CLANG)
+        s.translate("MY_VAL", "hello", FCT_GCC)
 
         s = s.with_comment(["anotha"])
-        s.translate("MY_VAL", "aye yo", FCT_CLANG)
+        s.translate("MY_VAL", "aye yo", FCT_GCC)
 
     def test_with_default(self) -> None:
         s = FCS_INT
@@ -110,7 +110,7 @@ class TestStandardComposites:
         # Just make sure a simple translate/describe doesn't explode.
         val_res = s.validate_any([1, 2, 5])
         assert val_res.is_ok()
-        s.translate("MY_ARR", val_res.unwrap(), FCT_CLANG)
+        s.translate("MY_ARR", val_res.unwrap(), FCT_GCC)
 
         with pytest.raises(Exception):
             FCSchemaStrictList(FCS_INT, 10, 1)
@@ -174,7 +174,7 @@ class TestStandardComposites:
         
         rv = s.validate_any(["bob", 16])
         assert rv.is_ok()
-        s.translate("", rv.unwrap(), FCT_CLANG) # Simple translate check!
+        s.translate("", rv.unwrap(), FCT_GCC) # Simple translate check!
 
         # Let's just test out a full default, why not!
         s = FCSchemaStruct([
@@ -219,7 +219,7 @@ class TestBigComposites:
                 {"location": "Boonton", "population": 5000},
             ]
         })
-        s.translate("FC", rv.unwrap(), FCT_CLANG)
+        s.translate("FC", rv.unwrap(), FCT_GCC)
 
         assert s.default().is_err()
         assert s.validate_any(["Cali", []]) == Ok({
@@ -269,6 +269,6 @@ class TestBigComposites:
             "x_intervals": [],
             "y_intervals": [[1, 2]]
         })
-        s.translate("FC", rv.unwrap(), FCT_CLANG)
+        s.translate("FC", rv.unwrap(), FCT_GCC)
 
 

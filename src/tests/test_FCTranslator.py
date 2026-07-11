@@ -15,8 +15,11 @@ def try_FCTranslator(translator: FCTranslator) -> None:
     translator.definition("val2", 12389)
     translator.definition("val2", True)
 
-def test_clang_translator():
-    try_FCTranslator(FCT_CLANG)
+def test_gcc_translator():
+    try_FCTranslator(FCT_GCC)
+
+def test_gas_translator():
+    try_FCTranslator(FCT_GAS)
 
 def test_ld_translator():
     try_FCTranslator(FCT_LD32)
