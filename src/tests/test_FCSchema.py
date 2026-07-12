@@ -132,6 +132,17 @@ class TestStandardComposites:
         assert s.validate_any(["H"]) == Ok(["H"])
         assert s.validate_any(["H", "T"]) == Ok(["H", "T"])
 
+    def test_schema_strict_dict(self) -> None:
+        s = FCSchemaStrictDict(FCS_INT)
+        assert s.validate_any({}) == Ok({})
+        assert s.validate_any({"v": 1}) == Ok({"v": 1})
+        assert s.validate_any({"v": 1, "b": 2}) == Ok({"v": 1, "b": 2})
+        assert s.validate_any({"a": 1, "b": "hello"}).is_err()
+
+        val_res = s.validate_any({"val": 1, "val1": 2})
+        assert val_res.is_ok()
+        s.translate("MY_DICT", val_res.unwrap(), FCT_GCC)
+
     def test_schema_struct(self) -> None:
         # A struct schema must have 1 or more fields.
         with pytest.raises(Exception):
@@ -270,5 +281,33 @@ class TestBigComposites:
             "y_intervals": [[1, 2]]
         })
         s.translate("FC", rv.unwrap(), FCT_GCC)
+
+    def test_big_schema2(self) -> None:
+        s = FCSchemaStrictDict(
+            FCSchemaStruct([
+                ("age", FCS_INT.with_default_any(25)),
+                ("weight", FCS_INT.with_default_any(160))
+            ])
+        )
+
+        assert s.validate_any({
+            "Bob": [35, 175],
+            "Mark": [30, 165],
+            "Dale": {"weight": 190, "age": 40}
+        }) == Ok({
+            "Bob": {"age": 35, "weight": 175},
+            "Mark": {"age": 30, "weight": 165},
+            "Dale": {"weight": 190, "age": 40}
+        })
+
+        assert s.validate_any({
+            "David": []
+        }) == Ok({
+            "David": {"age": 25, "weight": 160}
+        })
+
+        assert s.validate_any({
+            "David": [35, "A string"]
+        }).is_err()
 
 
