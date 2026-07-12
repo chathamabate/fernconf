@@ -288,6 +288,41 @@ class FCSchemaStrictList(FCSchema):
 
         return output_lines
 
+class FCSchemaStrictDict(FCSchema):
+    """
+    A strict dict is just like a strict list above, just a dictionary value is accepted instead!
+    All values must conform to the given element schema!
+    """
+    def __init__(self, ele_schema: FCSchema):
+        self.ele_schema = ele_schema
+
+    @override 
+    def validate(self, value: FCValue) -> Result[FCValue, str]:
+        if not isinstance(value, dict):
+            return Err("Given value is not of type dict")
+
+        dict_value = cast(dict[str, FCValue], value)
+
+        new_value = {}
+        for k, v in dict_value.items():
+            new_v = self.ele_schema.validate(v)
+            if new_v.is_err():
+                return new_v.map_err(lambda msg: f"Error @ key \"{k}\": {msg}")
+            new_value[k] = new_v.unwrap()
+
+        return Ok(new_value)
+
+    @override
+    def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
+        output_lines = []
+        dict_value = cast(dict[str, FCValue], value)
+
+        for k, v in dict_value.items():
+            output_lines += self.ele_schema.translate(prefix + "_" + k, v, translator)
+
+        return output_lines
+
+
 class FCSchemaStruct(FCSchema):
     def __init__(self, fields: list[tuple[str, FCSchema]]):
         """
