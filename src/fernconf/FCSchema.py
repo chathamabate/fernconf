@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fernconf.FCValue import FCValue, FC_ID_PATTERN, fcv_of
-from fernconf.FCTranslator import FCTranslator, FCTranslatorCLang
+from fernconf.FCTranslator import FCTranslator
 
 from abc import ABC, abstractmethod
 from typing import Any, override, cast, Callable

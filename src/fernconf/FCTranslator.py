@@ -27,9 +27,14 @@ class FCTranslator(ABC):
         """
         pass
 
-    @abstractmethod
-    def _definition(self, value_name: str, value: str | bool | int) -> list[str]:
-        pass
+    def _definition_str(self, value_name: str, value: str) -> list[str]:
+        return []
+
+    def _definition_bool(self, value_name: str, value: bool) -> list[str]:
+        return []
+
+    def _definition_int(self, value_name: str, value: int) -> list[str]:
+        return []
 
     def definition(self, value_name: str, value: str | bool | int) -> list[str]:
         """
@@ -44,31 +49,122 @@ class FCTranslator(ABC):
             # made a mistake (not the user). 
             raise Exception(f"value name did not follow FC ID regex format: \"{value_name}\"")
 
-        return self._definition(value_name, value)
+        match value:
+            case str():
+                return self._definition_str(value_name, value)
 
+            case bool():
+                return self._definition_bool(value_name, value)
 
-class FCTranslatorCLang(FCTranslator):
+            case int():
+                return self._definition_int(value_name, value)
+                
+            case _:
+                raise Exception(f"Can't define given value \"{value_name}\", unexpected type")
+
+class FCTranslatorGCC(FCTranslator):
+    """
+    This defines C preprocessor macros for ALL value types!
+    """
+
     @override
     def comment(self, message: list[str]) -> list[str]:
         return ["/*"] + [" * " + line for line in message] + [" */"]
 
     @override
-    def _definition(self, value_name: str, value: str | bool | int) -> list[str]:
-        match value:
-            case str():
-                return [f"#define {value_name} \"{value}\""]
-            case bool():
-                return [("" if value else "// ") + f"#define {value_name}"]
-            case int():
-                if value < 0:
-                    neg_suffix = "LL" if value < -0x8000_0000 else "L"
-                    return [f"#define {value_name} ({str(value)}{neg_suffix})"]
-                
-                pos_suffix = "ULL" if value > 0xFFFF_FFFF else "UL"
-                return [f"#define {value_name} (0x{value:X}{pos_suffix})"]
-                
-            case _:
-                raise Exception(f"Can't define given value \"{value_name}\"")
+    def _definition_str(self, value_name: str, value: str) -> list[str]:
+        return [f"#define {value_name} \"{value}\""]
 
-FCT_CLANG = FCTranslatorCLang()
+    @override
+    def _definition_bool(self, value_name: str, value: bool) -> list[str]:
+        return [("" if value else "// ") + f"#define {value_name}"]
+
+    @override
+    def _definition_int(self, value_name: str, value: int) -> list[str]:
+        if value < 0:
+            neg_suffix = "LL" if value < -0x8000_0000 else "L"
+            return [f"#define {value_name} ({str(value)}{neg_suffix})"]
+        
+        pos_suffix = "ULL" if value > 0xFFFF_FFFF else "UL"
+        return [f"#define {value_name} (0x{value:X}{pos_suffix})"]
+
+FCT_GCC = FCTranslatorGCC()
+
+class FCTranslatorGAS(FCTranslator):
+    """
+    This defines C preprocessor type macros also for ALL value types!
+
+    However, numbers are not given length suffixes like in C.
+
+    This output is meant to be used for .S gnu assembly files which are first put through 
+    the preprocessor.
+    """
+
+    @override
+    def comment(self, message: list[str]) -> list[str]:
+        return ["/*"] + [" * " + line for line in message] + [" */"]
+
+    @override
+    def _definition_str(self, value_name: str, value: str) -> list[str]:
+        return [f"#define {value_name} \"{value}\""]
+
+    @override
+    def _definition_bool(self, value_name: str, value: bool) -> list[str]:
+        return [("" if value else "// ") + f"#define {value_name}"]
+
+    @override
+    def _definition_int(self, value_name: str, value: int) -> list[str]:
+        if value < 0:
+            return [f"#define {value_name} {str(value)}"]
+        
+        return [f"#define {value_name} 0x{value:X}"]
+
+FCT_GAS = FCTranslatorGAS()
+
+class FCTranslatorLD32(FCTranslator):
+    """
+    This is kinda unique, this if for linker scirpts of 32-bit binaries.
+    It uses C preprocessor directives though, declaring actual integer style variables in 
+    linkerscripts will create a symbol in the binary! 
+
+    The intention that the user of this will invoke the C preprocessor on their linker script
+    (which should #include the output of this translator)
+    """
+
+    @override
+    def comment(self, message: list[str]) -> list[str]:
+        return ["/*"] + [" * " + line for line in message] + [" */"]
+
+    @override
+    def _definition_int(self, value_name: str, value: int) -> list[str]:
+        if value < 0 or 0xFFFF_FFFF < value:
+            return []
+
+        # We only translate integer values which could be valid memory addresses!
+        # No other values should ever be referenceable in a linker script!
+        return [f"#define {value_name} (0x{value:X})"]
+
+FCT_LD32 = FCTranslatorLD32()
+
+class FCTranslatorMake(FCTranslator):
+    @override
+    def comment(self, message: list[str]) -> list[str]:
+        return ["#  " + line for line in message]
+
+    @override
+    def _definition_str(self, value_name: str, value: str) -> list[str]:
+        return [f"{value_name}:={value}"]
+
+    @override
+    def _definition_bool(self, value_name: str, value: bool) -> list[str]:
+        return [f"{value_name}:={'y' if value else 'n'}"] # y/n in Make!
+
+    @override
+    def _definition_int(self, value_name: str, value: int) -> list[str]:
+        if value < 0:
+            return [f"{value}:={str(value)}"]
+
+        return [f"{value_name}:=0x{value:X}"]
+
+FCT_MAKE = FCTranslatorMake()
 
