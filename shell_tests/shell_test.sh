@@ -46,23 +46,40 @@ expect_fail python $tool ./non-existent-file.json # File doesn't exist
 expect_fail python $tool -f bad_translator $good_config
 echo
 
+# Test the differenet included translator types!
+# GCC, GAS, and LD32 outputs all use C preprocessor syntax (with slight nuances to the output values)
+# These tests really just confirm that the translator output conforms to the syntax it translates
+# to. This isn't very rigorous, but better than nothing.
+#
+# A more involved test could actually compile a program which uses translator output macros.
+
 test_header "Test GCC Output"
 expect_succeed python $tool -f gcc -o $build_dir/gcc_out.h $good_config
-expect_succeed gcc $example_srcs_dir/example.c -I$build_dir -o $build_dir/gcc_out
-expect_succeed rm $build_dir/gcc_out.h $build_dir/gcc_out
+expect_succeed gcc -xc -E $build_dir/gcc_out.h -o $build_dir/gcc_out_p.h
+expect_succeed rm $build_dir/gcc_out.h $build_dir/gcc_out_p.h
 echo
 
 test_header "Test GAS Output"
 expect_succeed python $tool -f gas -o $build_dir/gas_out.h $good_config
-expect_succeed gcc $example_srcs_dir/example.S -I$build_dir -o $build_dir/gas_out -c
-expect_succeed rm $build_dir/gas_out.h $build_dir/gas_out
+expect_succeed gcc -xc -E $build_dir/gas_out.h -o $build_dir/gas_out_p.h
+expect_succeed rm $build_dir/gas_out.h $build_dir/gas_out_p.h
+echo
+
+test_header "Test LD32 Output"
+expect_succeed python $tool -f ld -o $build_dir/gas_out.h $good_config
+expect_succeed gcc -xc -E $build_dir/gas_out.h -o $build_dir/gas_out_p.h
+expect_succeed rm $build_dir/gas_out.h $build_dir/gas_out_p.h
 echo
 
 test_header "Test Make Output"
 expect_succeed python $tool -f make -o $build_dir/make_out.mk $good_config
-expect_succeed make -f $example_srcs_dir/example.mk -I$build_dir
+expect_succeed test -f $build_dir/make_out.mk
+echo -e "\ndummy_target:\n\t@true" >> $build_dir/make_out.mk
+expect_succeed make -f $build_dir/make_out.mk
 expect_succeed rm $build_dir/make_out.mk
 echo
+
+# still need to figure out the best way for linker output tbh.
 
 echo -e "${BOLD}SUCCESS${RESET} ${BRIGHT_BLACK}(Cleaning Up)${RESET}"
 
