@@ -5,12 +5,13 @@ from fernconf.FCTooling import *
 
 simple_schema = FCSchemaStruct([
     ("area_name", FCS_STR),
+    ("domestic", FCS_BOOL.with_default_any(True)),
     ("cities", FCSchemaStrictList(
         FCSchemaStruct([
             ("location", FCS_STR),
             ("population", FCS_INT.with_extra_checks(
                 not_empty=lambda pop: Ok(None) if cast(int, pop) > 0 else Err("value must be positive non-zero")
-            ))
+            )),
         ])
     ))
 ])

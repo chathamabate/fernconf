@@ -1,0 +1,13 @@
+
+Validating and translating good_config.json will produce
+outputs in different formats.
+
+We'll confirm the formats were generated correctly by
+having example sources here in different languages which
+reference the created files!
+
+The example sources won't really reference individual translated values
+as their naming scheme may change. This just makes sure there isn't an
+obvious syntax error in what is output by the translator!
+
+These tests could probably be a little better designed :,(
