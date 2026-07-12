@@ -16,7 +16,6 @@ tool=$st_dir/SimpleTool.py
 good_config=$st_dir/good_config.json
 bad_config=$st_dir/bad_config.json
 
-example_srcs_dir=$st_dir/example_srcs
 build_dir=$st_dir/build
 
 . $st_dir/shell_test_helpers.sh
