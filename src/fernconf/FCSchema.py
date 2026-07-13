@@ -22,6 +22,12 @@ class FCSchema(ABC):
         """
         return FCSchemaWithComment(self, comment)
 
+    def with_translates(self, *extra_translates: Callable[[str, FCValue, FCTranslator], list[str]] ) -> FCSchema:
+        """
+        This is for adding an extra translation step to a schema!
+        """
+        return FCSchemaWithExtraTranslates(self, *extra_translates)
+
     def default(self) -> Result[FCValue, str]:
         """
         Here more than ever, make sure that the value returned is not changed!
@@ -126,6 +132,24 @@ class FCSchemaWithComment(FCSchemaWrapper):
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
         return translator.comment(self.comment) + self.inner.translate(prefix, value, translator)
+
+class FCSchemaWithExtraTranslates(FCSchemaWrapper):
+    def __init__(self, inner: FCSchema, *extra_translates: Callable[[str, FCValue, FCTranslator], list[str]]):
+        super().__init__(inner)
+
+        if len(extra_translates) == 0:
+            raise Exception("Extra translates cannot be empty")
+
+        self.extra_translates = extra_translates
+
+    @override
+    def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
+        output = self.inner.translate(prefix, value, translator)
+
+        for et in self.extra_translates:
+            output += et(prefix, value, translator)
+
+        return output
 
 class FCSchemaWithDefault(FCSchemaWrapper):
     def __init__(self, schema: FCSchema, default_value: FCValue):

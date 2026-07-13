@@ -52,6 +52,11 @@ class TestSimpleComposites:
         s = s.with_comment(["anotha"])
         s.translate("MY_VAL", "aye yo", FCT_GCC)
 
+    def test_with_extra_translates(self) -> None:
+        s = FCS_STR.with_translates(lambda p, v, t: t.definition(p + "_UC", cast(str, v).upper()),
+                                    lambda p, v, t: t.definition(p + "_LC", cast(str, v).lower()))
+        s.translate("MY_VAL", "Woah", FCT_GCC)
+
     def test_with_default(self) -> None:
         s = FCS_INT
         assert s.default().is_err()
