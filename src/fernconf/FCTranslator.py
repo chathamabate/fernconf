@@ -149,7 +149,7 @@ FCT_LD32 = FCTranslatorLD32()
 class FCTranslatorMake(FCTranslator):
     @override
     def comment(self, message: list[str]) -> list[str]:
-        return ["#  " + line for line in message]
+        return ["# " + line for line in message]
 
     @override
     def _definition_str(self, value_name: str, value: str) -> list[str]:
