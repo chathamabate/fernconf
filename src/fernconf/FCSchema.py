@@ -348,7 +348,8 @@ class FCSchemaStrictDict(FCSchema):
 
 
 class FCSchemaStruct(FCSchema):
-    def __init__(self, fields: list[tuple[str, FCSchema]]):
+    def __init__(self, fields: list[tuple[str, FCSchema]], 
+                 **derived: tuple[FCSchema, Callable[[FCValue], FCValue]]):
         """
         A Struct is just an ordered list of named values.
 
@@ -358,12 +359,18 @@ class FCSchemaStruct(FCSchema):
 
         In both cases, missing values will be attempted to be filled in with defaults.
         The dict representation is always what is returned from validate!
+
+        "derived fields" can be specified with kwargs. This is allows for fields to be added to
+        the struct during validation as a function of the original value.
+        Describing the validation process is a little confusing, your best off just looking at
+        the validate function below to see the steps taken.
         """
         if len(fields) == 0:
             raise Exception("An FCSchemaStruct cannot be empty!")
         
         self.field_order = [field[0] for field in fields]
         self.fields_dict: dict[str, FCSchema] = {}
+        self.derived_dict = derived
 
         # We will try to generate a single default value here!
         self.default_result: Result[dict[str, FCValue], str] = Ok({})
@@ -385,14 +392,47 @@ class FCSchemaStruct(FCSchema):
                     # NOTE: That is totally ok for our struct not to have a default value!
                     self.default_result = Err(f"Struct has no default value, (\"{field}\" is required)")
 
+        # For derived fields, we need to both confirm valid field names, and also, potentially
+        # add to the default value!
+        for field, (schema, func) in derived.items():
+            if not FC_ID_PATTERN.fullmatch(field):
+                raise Exception(f"FCSchemaStruct derived field name is invalid \"{field}\"")
+
+            if field in self.fields_dict:
+                raise Exception(f"FCSchemaStruct derived field name already exists \"{field}\"")
+
+        # NOTE: For adding to the default value, we don't actually use the derived schema default
+        # values. We instead simulate the validation process on the currently constructed default.
+        # That is, we pass the default into the given lambda for each derived field!
+        if self.default_result.is_ok():
+            dv = self.default_result.unwrap()
+
+            derived_fvs = {}
+            for field, (schema, func) in derived.items():
+                dfv_res = schema.validate(func(dv))
+
+                # Remember, that when we have a dict value which contains valid values for all
+                # the explicit fields, the derived lambda is expected to ALWAY return a correct
+                # value! If a lambda returns a value which is invalid by its corresponding schema
+                # this is ALWAYS an implentor error!
+                if not dfv_res.is_ok():
+                    raise Exception(f"FCSchemaStruct has bad derived field lambda \"{field}\"")
+
+                derived_fvs[field] = dfv_res.unwrap()
+
+            # Don't modify the actual default value until the end!
+            dv |= derived_fvs
+
     @override
     def default(self) -> Result[FCValue, str]:
         return self.default_result 
 
-    def validate_list(self, value: list[FCValue]) -> Result[FCValue, str]:
+    def _validate_list(self, value: list[FCValue]) -> Result[FCValue, str]:
         """
         Here given values must be in the same order as `self.fields`.
         If fields are missing at the end, they'll be attempted to be filled in with defaults.
+
+        DOES NOT ADD DERIVED FIELDS
         """
         if len(value) > len(self.field_order):
             return Err(f"Too many fields provided: {len(value)} (expected={len(self.field_order)})")
@@ -420,10 +460,12 @@ class FCSchemaStruct(FCSchema):
 
         return Ok(new_value)
 
-    def validate_dict(self, value: dict[str, FCValue]) -> Result[FCValue, str]:
+    def _validate_dict(self, value: dict[str, FCValue]) -> Result[FCValue, str]:
         """
         Here we just make sure all requred values are present and valid.
         Missing fields being populated with defaults.
+
+        DOES NOT ADD DERIVED FIELDS
         """
         new_value = {}
         for name, field_value in value.items():
@@ -454,13 +496,21 @@ class FCSchemaStruct(FCSchema):
         While both list or dict FCValues are accepted by this function, only a dict is ever 
         returned!
         """
+        valid1_res = None
         match value:
             case list():
-                return self.validate_list(cast(list[FCValue], value))
+                valid1_res = self._validate_list(cast(list[FCValue], value))
             case dict():
-                return self.validate_dict(cast(dict[str, FCValue], value))
+                valid1_res self._validate_dict(cast(dict[str, FCValue], value))
             case _:
                 return Err("Struct must either be specified as a list or dict")
+
+        if valid1_res.is_err():
+            return valid1_res
+
+        valid1_value = valid1_res.unwrap()
+
+        # Now for derived fields!
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
