@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fernconf.FCValue import FCValue, FC_ID_PATTERN, fcv_of
+from fernconf.FCValue import *
 from fernconf.FCTranslator import FCTranslator
 
 from abc import ABC, abstractmethod
@@ -228,12 +228,23 @@ FCS_BOOL: FCSchema = FCSchemaBool()
 class FCSchemaInt(FCSchema):
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, str]:
-        if not isinstance(value, int):
-            return Err(f"Given value is not of type int")
+        match value:
+            case int():
+                # Given `value` is a valid FCValue. 
+                # There is no need to do 64-bit bounds checking here!
+                return Ok(value)
 
-        # Given `value` is a valid FCValue, there is no need to do 64-bit bounds checking here!
+            case str():
+                try:
+                    iv = int(value, 16)
 
-        return Ok(value)
+                    # `iv` can be any integer value at this point, must do bounds check!
+                    return fcv_int_check_result(iv)
+                except ValueError:
+                    return Err(f"String could not be parsed as hex \"{value}\"")
+
+            case _:
+                return Err(f"Given value cannot be interpreted as an int")
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:

@@ -20,6 +20,11 @@ class TestSimpleSchema:
         assert s.validate_any(1) == Ok(1)
         assert s.validate_any(1.2).is_err()
         assert s.validate_any(-100) == Ok(-100)
+        assert s.validate_any("0x10") == Ok(16)
+        assert s.validate_any("-0x10") == Ok(-16)
+        assert s.validate_any("0x1_0000") == Ok(0x1_0000)
+        assert s.validate_any("-0x8000_0000_0000_0001").is_err()
+        assert s.validate_any("0x1_0000_0000_0000_0000").is_err()
         assert s.validate_any("hello").is_err()
 
         v_res = s.validate_any(10)
@@ -71,7 +76,7 @@ class TestSimpleComposites:
             s.with_default_any(1.23)
 
         with pytest.raises(Exception):
-            s.with_default_any("343")
+            s.with_default_any("343!")
 
     def test_with_extra_checks(self) -> None:
         s = FCS_INT
