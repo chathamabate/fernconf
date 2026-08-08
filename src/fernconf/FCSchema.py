@@ -395,6 +395,7 @@ class FCSchemaStruct(FCSchema):
         # For derived fields, we need to both confirm valid field names, and also, potentially
         # add to the default value!
         for field, (schema, func) in derived.items():
+            # This may be redundant because we are using kwargs, but whatever.
             if not FC_ID_PATTERN.fullmatch(field):
                 raise Exception(f"FCSchemaStruct derived field name is invalid \"{field}\"")
 

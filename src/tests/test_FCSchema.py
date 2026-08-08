@@ -201,6 +201,43 @@ class TestStandardComposites:
 
         assert s.default() == Ok({"v": 1, "p": 2, "r": 3})
 
+    def test_schema_struct_with_derived(self) -> None:
+        with pytest.raises(Exception):
+            # repeat field name.
+            FCSchemaStruct([("a", FCS_INT)], a=(FCS_INT, lambda v: 1))
+
+        with pytest.raises(Exception):
+            # Derived value doesn't match expected schema!
+            FCSchemaStruct([("a", FCS_INT.with_default(0))], b=(FCS_INT, lambda v: "hello"))
+
+        # bs will have no default value here, so an exception shouldn't be thrown until actually
+        # trying to validate a value.
+        bs = FCSchemaStruct([("a", FCS_INT)], b=(FCS_INT, lambda v: "hello"))
+        assert bs.default().is_err()
+        with pytest.raises(Exception):
+            bs.validate_any([1])
+
+        s = FCSchemaStruct([
+            ("start", FCS_INT.with_default(0)),
+            ("end_inc", FCS_INT)
+        ], end=(FCS_INT, lambda v: cast(dict[str, int], v)["end_inc"] + 1))
+
+        assert s.default().is_err()
+        assert s.validate_any([1, 2]) == Ok({"start": 1, "end_inc": 2, "end": 3})
+        assert s.validate_any({"end_inc": 0}) == Ok({"start": 0, "end_inc": 0, "end": 1})
+
+        s = FCSchemaStruct([
+            ("v", FCS_INT.with_default(1))
+            ], 
+            v4=(FCS_INT, lambda v: cast(dict[str, int], v)["v"] * 4),
+            v5=(FCS_INT, lambda v: cast(dict[str, int], v)["v"] * 5),
+       )
+
+        assert s.default() == Ok({"v": 1, "v4": 4, "v5": 5})
+
+        s = s.with_default([2]) # Kinda out of scope of this test, but whatever.
+        assert s.default() == Ok({"v": 2, "v4": 8, "v5": 10})
+
 class TestBigComposites:
     """
     Kinda just misc tests with big ass schema.
