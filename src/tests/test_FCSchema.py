@@ -217,7 +217,7 @@ class TestStandardComposites:
         with pytest.raises(Exception):
             bs.validate_any([1])
 
-        s = FCSchemaStruct([
+        s: FCSchema = FCSchemaStruct([
             ("start", FCS_INT.with_default(0)),
             ("end_inc", FCS_INT)
         ], end=(FCS_INT, lambda v: cast(dict[str, int], v)["end_inc"] + 1))
@@ -225,6 +225,7 @@ class TestStandardComposites:
         assert s.default().is_err()
         assert s.validate_any([1, 2]) == Ok({"start": 1, "end_inc": 2, "end": 3})
         assert s.validate_any({"end_inc": 0}) == Ok({"start": 0, "end_inc": 0, "end": 1})
+        assert s.validate_any({"end_inc": 0, "end": 10}).is_err()
 
         s = FCSchemaStruct([
             ("v", FCS_INT.with_default(1))
@@ -235,7 +236,7 @@ class TestStandardComposites:
 
         assert s.default() == Ok({"v": 1, "v4": 4, "v5": 5})
 
-        s = s.with_default([2]) # Kinda out of scope of this test, but whatever.
+        s = s.with_default_any([2]) # Kinda out of scope of this test, but whatever.
         assert s.default() == Ok({"v": 2, "v4": 8, "v5": 10})
 
 class TestBigComposites:
@@ -351,5 +352,27 @@ class TestBigComposites:
         assert s.validate_any({
             "David": [35, "A string"]
         }).is_err()
+
+    def test_big_schema3(self) -> None:
+        sr = FCSchemaStruct(
+            [
+                ("start", FCS_INT), 
+                ("end", FCS_INT)
+            ], 
+            length=(FCS_INT, lambda v: cast(dict[str, int], v)["end"] - cast(dict[str, int], v)["start"])
+        ).with_extra_checks(valid_range=lambda v: Ok(None) if cast(dict[str, int], v)["length"] >= 0 else Err("Invalid Range!"))
+
+        s = FCSchemaStrictList(FCSchemaStruct(
+            [
+                ("x", FCS_INT)
+            ],
+            drange=(sr, lambda v: [cast(dict[str, int], v)["x"], cast(dict[str, int], v)["x"] + 1])
+        ))
+
+        assert s.validate_any([[1], [2]]) == Ok([
+            {"x": 1, "drange": {"start": 1, "end": 2, "length": 1}},
+            {"x": 2, "drange": {"start": 2, "end": 3, "length": 1}}
+        ])
+
 
 
