@@ -427,7 +427,7 @@ class FCSchemaStruct(FCSchema):
     def default(self) -> Result[FCValue, str]:
         return self.default_result 
 
-    def _validate_list(self, value: list[FCValue]) -> Result[FCValue, str]:
+    def _validate_list(self, value: list[FCValue]) -> Result[dict[str, FCValue], str]:
         """
         Here given values must be in the same order as `self.fields`.
         If fields are missing at the end, they'll be attempted to be filled in with defaults.
@@ -444,7 +444,7 @@ class FCSchemaStruct(FCSchema):
             field_res = schema.validate(value[i])
 
             if field_res.is_err():
-                return field_res.map_err(lambda msg: f"Failure @ field \"{field_name}\": {msg}")
+                return Err(f"Failure @ field \"{field_name}\": {field_res.unwrap_err()}")
 
             new_value[field_name] = field_res.unwrap()
 
@@ -460,7 +460,7 @@ class FCSchemaStruct(FCSchema):
 
         return Ok(new_value)
 
-    def _validate_dict(self, value: dict[str, FCValue]) -> Result[FCValue, str]:
+    def _validate_dict(self, value: dict[str, FCValue]) -> Result[dict[str, FCValue], str]:
         """
         Here we just make sure all requred values are present and valid.
         Missing fields being populated with defaults.
@@ -474,7 +474,7 @@ class FCSchemaStruct(FCSchema):
             field_res = self.fields_dict[name].validate(field_value)
 
             if field_res.is_err():
-                return field_res.map_err(lambda msg: f"Error @ field \"{name}\": {msg}")
+                return Err(f"Failure @ field \"{name}\": {field_res.unwrap_err()}")
 
             new_value[name] = field_res.unwrap()
 
@@ -484,7 +484,7 @@ class FCSchemaStruct(FCSchema):
                 dv_res = schema.default()
 
                 if dv_res.is_err():
-                    return dv_res.map_err(lambda msg: f"Error @ field \"{name}\": {msg}")
+                    return Err(f"Failure @ field \"{name}\": {dv_res.unwrap_err()}")
 
                 new_value[name] = dv_res.unwrap()
 
@@ -496,21 +496,36 @@ class FCSchemaStruct(FCSchema):
         While both list or dict FCValues are accepted by this function, only a dict is ever 
         returned!
         """
-        valid1_res = None
+        valid_res = None
         match value:
             case list():
-                valid1_res = self._validate_list(cast(list[FCValue], value))
+                valid_res = self._validate_list(cast(list[FCValue], value))
             case dict():
-                valid1_res self._validate_dict(cast(dict[str, FCValue], value))
+                valid_res = self._validate_dict(cast(dict[str, FCValue], value))
             case _:
                 return Err("Struct must either be specified as a list or dict")
 
-        if valid1_res.is_err():
-            return valid1_res
+        if valid_res.is_err():
+            return valid_res
 
-        valid1_value = valid1_res.unwrap()
+        valid_value = valid_res.unwrap()
 
         # Now for derived fields!
+        derived_values: dict[str, FCValue] = {}
+        for field, (schema, func) in self.derived_dict.items():
+            dfv_res = schema.validate(func(valid_value))
+            if not dfv_res.is_ok():
+                raise Exception(f"FCSchemaStruct has bad derived field lambda \"{field}\"")
+
+            derived_values[field] = dfv_res.unwrap()
+
+        # NOTE: It is ok to modify this value as I personally know that _validate_list and 
+        # _validate_dict construct entirely new dictionaries during validation.
+        # It is impossible the `valid_value` dict to have any references outside of this
+        # very function!
+        valid_value |= derived_values
+
+        return Ok(valid_value)
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
