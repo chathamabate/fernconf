@@ -374,10 +374,14 @@ class TestBigComposites:
             drange=(sr, lambda v: [cast(dict[str, int], v)["x"], cast(dict[str, int], v)["x"] + 1])
         ))
 
-        assert s.validate_any([[1], [2]]) == Ok([
+        vres = s.validate_any([[1], [2]])
+        assert vres == Ok([
             {"x": 1, "drange": {"start": 1, "end": 2, "length": 1}},
             {"x": 2, "drange": {"start": 2, "end": 3, "length": 1}}
         ])
 
+        # Make sure translate doesn't throw unexpected exceptions!
+        s.translate("FC", vres.unwrap(), FCT_GCC)
 
+        
 

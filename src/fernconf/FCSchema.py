@@ -11,7 +11,6 @@ class FCSchema(ABC):
     """
     An FCSchema is way of confirming an FCValue conforms to certain custom rules!
     """
-
     def __init__(self):
         pass
 
@@ -550,6 +549,9 @@ class FCSchemaStruct(FCSchema):
         dict_val = cast(dict[str, FCValue], value)
         for name, ele_schema in self.fields_dict.items():
             lines += ele_schema.translate(prefix + "_" + name, dict_val[name], translator)
+
+        for name, (schema, _) in self.derived_dict.items():
+            lines += schema.translate(prefix + "_" + name, dict_val[name], translator)
 
         return lines
 
