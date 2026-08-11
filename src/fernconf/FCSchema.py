@@ -422,10 +422,8 @@ class FCSchemaStruct(FCSchema):
             for field, (schema, func) in derived.items():
                 dfv_res = schema.validate(func(dv))
 
-                # Remember, that when we have a dict value which contains valid values for all
-                # the explicit fields, the derived lambda is expected to ALWAY return a correct
-                # value! If a lambda returns a value which is invalid by its corresponding schema
-                # this is ALWAYS an implentor error!
+                # If a derived value is failed to be created for the given default,
+                # this is an error with the schema, and thus warrants an exception!
                 if not dfv_res.is_ok():
                     raise Exception(f"FCSchemaStruct has bad derived field lambda \"{field}\"")
 
@@ -525,8 +523,16 @@ class FCSchemaStruct(FCSchema):
         derived_values: dict[str, FCValue] = {}
         for field, (schema, func) in self.derived_dict.items():
             dfv_res = schema.validate(func(valid_value))
+
+            # NOTE: There was a time where I maintained the condition that if initial fields
+            # are valid, derived fields must also be valid. This if statement actually used to
+            # to raise an exception! The idea being that the schema designer should prevent
+            # the derived value from ever failing validation!
+            #
+            # In theory this was cool, but ultimately lead to kinda confusing extras checks needed
+            # on the initial fields to guarantee valid derived fields.
             if not dfv_res.is_ok():
-                raise Exception(f"FCSchemaStruct has bad derived field lambda \"{field}\"")
+                return dfv_res.map_err(lambda msg: f"Error @ derived field \"{field}\": {msg}")
 
             derived_values[field] = dfv_res.unwrap()
 
