@@ -212,15 +212,14 @@ class TestStandardComposites:
             FCSchemaStruct([("a", FCS_INT)], a=(FCS_INT, lambda v: 1))
 
         with pytest.raises(Exception):
-            # Derived value doesn't match expected schema!
+            # Derived value on default doesn't match expected schema!
             FCSchemaStruct([("a", FCS_INT.with_default(0))], b=(FCS_INT, lambda v: "hello"))
 
-        # bs will have no default value here, so an exception shouldn't be thrown until actually
-        # trying to validate a value.
+        # bs has no default, so issues with derived field validation will not be 
+        # realized in the constructor!
         bs = FCSchemaStruct([("a", FCS_INT)], b=(FCS_INT, lambda v: "hello"))
         assert bs.default().is_err()
-        with pytest.raises(Exception):
-            bs.validate_any([1])
+        assert bs.validate_any("a").is_err()
 
         s: FCSchema = FCSchemaStruct([
             ("start", FCS_INT.with_default(0)),
