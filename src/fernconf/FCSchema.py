@@ -50,7 +50,7 @@ class FCSchema(ABC):
 
     def const(self, value: FCValue) -> FCSchema:
         """
-        This Schema will be given `value` as a default value AND will be given
+        This Schema will be given `value` as a default value THEN will be given
         and extra check which refuses all other values!
         """
 
@@ -62,6 +62,11 @@ class FCSchema(ABC):
             raise Exception(f"Invalid constant value: {validated_value_result.unwrap_err()}")
         validated_value = validated_value_result.unwrap()
 
+        # Its important to realize the default is changed BEFORE applying the
+        # extra checks. This way `self`'s current default value does not cause
+        # an exception to be thrown if it is not equal to value.
+        #
+        # NOTE: Realize, that the internal default values of `self` still exist!
         return self.with_default(value).with_extra_checks(
             check_const=lambda v: Ok(None) if v == validated_value else Err(f"Constant expected: {validated_value}")
         )
@@ -74,6 +79,15 @@ class FCSchema(ABC):
         return self.const(value_result.unwrap())
 
     def one_of(self, *values: FCValue) -> FCSchema:
+        """
+        The default overriding behavior is similar to that of `const`.
+
+        NOTE: The FIRST value given will be come the new defualt!
+        For example, self.one_of("a", "b", "c") sets "a" to the new default!
+        """
+        if len(values) == 0:
+            raise Exception("Must be given at least 1 choice for one_of")
+
         validated_value_results = [self.validate(v) for v in values]
 
         for index, vvr in enumerate(validated_value_results):
@@ -81,7 +95,7 @@ class FCSchema(ABC):
                 raise Exception(f"Invalid choice {index}: {vvr.unwrap_err()}")
 
         validated_values = [vvr.unwrap() for vvr in validated_value_results]
-        return self.with_extra_checks(
+        return self.with_default(values[0]).with_extra_checks(
             check_one_of=lambda v: Ok(None) if v in validated_values else Err(f"Value not one of: {validated_values}")
         )
 

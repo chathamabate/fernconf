@@ -128,9 +128,18 @@ class TestSimpleComposites:
 
         # You shouldn't do this, but it still should work!
         s.const_any(4)
+
+        # Check the expected default behavior:
+        # This is confusing, but allowed!
+        ts = FCS_INT.with_default_any(1).const_any(4)
+        assert ts.default() == Ok(4)
+        assert ts.validate_any(1).is_err()
         
     def test_one_of(self) -> None:
         s = FCS_STR
+
+        with pytest.raises(Exception):
+            s.one_of()
 
         with pytest.raises(Exception):
             s.one_of_any("hello", 1.2) # Non-FCValue
@@ -142,6 +151,11 @@ class TestSimpleComposites:
         assert s.validate_any("a") == Ok("a")
         assert s.validate_any("b") == Ok("b")
         assert s.validate_any("c") == Ok("c")
+        assert s.validate_any("d").is_err()
+        assert s.default() == Ok("a")
+
+        ts = FCS_STR.with_default_any("d").one_of_any("a", "b")
+        assert s.default() == Ok("a")
         assert s.validate_any("d").is_err()
 
 
@@ -368,29 +382,35 @@ class TestBigComposites:
         s = FCSchemaStrictDict(
             FCSchemaStruct([
                 ("age", FCS_INT.with_default_any(25)),
-                ("weight", FCS_INT.with_default_any(160))
+                ("weight", FCS_INT.with_default_any(160)),
+                ("sex", FCS_STR.one_of_any("m", "f").with_default_any("m"))
             ])
         )
 
         assert s.validate_any({
             "Bob": [35, 175],
-            "Mark": [30, 165],
+            "Marky": [30, 165, "f"],
             "Dale": {"weight": 190, "age": 40}
         }) == Ok({
-            "Bob": {"age": 35, "weight": 175},
-            "Mark": {"age": 30, "weight": 165},
-            "Dale": {"weight": 190, "age": 40}
+            "Bob": {"age": 35, "weight": 175, "sex": "m"},
+            "Marky": {"age": 30, "weight": 165, "sex": "f"},
+            "Dale": {"weight": 190, "age": 40, "sex": "m"}
         })
 
         assert s.validate_any({
             "David": []
         }) == Ok({
-            "David": {"age": 25, "weight": 160}
+            "David": {"age": 25, "weight": 160, "sex": "m"}
         })
 
         assert s.validate_any({
             "David": [35, "A string"]
         }).is_err()
+
+        assert s.validate_any({
+            "Dave": [20, 130, "c"] # Invalid sex value
+        }).is_err()
+
 
     def test_big_schema3(self) -> None:
         sr = FCSchemaStruct(
@@ -417,5 +437,52 @@ class TestBigComposites:
         # Make sure translate doesn't throw unexpected exceptions!
         s.translate("FC", vres.unwrap(), FCT_GCC)
 
+    def test_big_schema_const_and_one_of(self) -> None:
+        """
+        const and oneof are really just meant for primitve values, but there is nothing
+        stopping you from having a complex schema accept just a single value!
+        (That is what we are testing here)
+        """
         
+        s = FCSchemaStruct(
+            [
+                ("x", FCS_INT.const_any(4)),
+                ("y", FCS_INT.with_default(1))
+            ],
+            z=(FCS_INT, lambda v: cast(dict[str, int], v)["x"] * cast(dict[str, int], v)["y"])
+        )
+
+        assert s.validate_any([4, 3]) == Ok({"x": 4, "y": 3, "z": 12})
+        assert s.validate_any([4]) == Ok({"x": 4, "y": 1, "z": 4})
+        assert s.validate_any([3, 4]).is_err()
+
+        with pytest.raises(Exception):
+            s.const_any([2, 3])
+
+        assert s.default() == Ok({"x": 4, "y": 1, "z": 4})
+
+        # Ok, this is kinda nuanced, `const_any` will set the default value to [4, 5, 20] for
+        # the ENTIRE schema. However, the default value on `y` will still exist!
+        # If we actually give `cs` a value to validate, it will bypass the top level default value!
+        # In this case, the default value on `y` will once again become visible... and cause error.
+        #
+        # This result is kinda confusing, but ultimately, what I decided is best!
+        cs = s.const_any([4, 5])
+        assert cs.default() == Ok({"x": 4, "y": 5, "z": 20})
+        assert cs.validate_any([4, 5]) == Ok({"x": 4, "y": 5, "z": 20})
+        assert cs.validate_any({"x": 4}).is_err() # Default value of [4, 1, 4] gets realized!
+
+        # Alright, let's now try one of!
+
+        with pytest.raises(Exception):
+            s.one_of_any([3, 4]) 
+                
+        # Like in the const case, these options DO NOT include the original default!
+        # (BUT THAT'S OK!)
+        ss = s.one_of_any([4, 2], {"x": 4, "y": 5})
+
+        assert ss.default() == Ok({"x": 4, "y": 2, "z": 8})
+        assert ss.validate_any([4]).is_err()
+        assert ss.validate_any([4, 5]) == Ok({"x": 4, "y": 5, "z": 20})
+        assert ss.validate_any(["a"]).is_err() # A kinda dummy check here, but whatever
 
