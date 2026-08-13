@@ -48,6 +48,46 @@ class FCSchema(ABC):
     def with_extra_checks(self, **checks: Callable[[FCValue], Result[None, str]]) -> FCSchema:
         return FCSchemaWithExtraChecks(self, **checks)
 
+    def const(self, value: FCValue) -> FCSchema:
+        validated_value_result = self.validate(value)
+
+        if validated_value_result.is_err():
+            raise Exception(f"Invalid constant value: {validated_value_result.unwrap_err()}")
+
+        validated_value = validated_value_result.unwrap()
+        return self.with_extra_checks(
+            check_const=lambda v: Ok(None) if v == validated_value else Err(f"Constant expected: {validated_value}")
+        )
+
+    def const_any(self, value: Any) -> FCSchema:
+        value_result = fcv_of(value)
+        if value_result.is_err():
+            raise Exception(f"Constant value is not FCValue: {value_result.unwrap_err()}")
+
+        return self.const(value_result.unwrap())
+
+    def one_of(self, *values: FCValue) -> FCSchema:
+        validated_value_results = [self.validate(v) for v in values]
+
+        for index, vvr in enumerate(validated_value_results):
+            if vvr.is_err():
+                raise Exception(f"Invalid choice {index}: {vvr.unwrap_err()}")
+
+        validated_values = [vvr.unwrap() for vvr in validated_value_results]
+        return self.with_extra_checks(
+            check_one_of=lambda v: Ok(None) if v in validated_values else Err(f"Value not one of: {validated_values}")
+        )
+
+    def one_of_any(self, *values: Any):
+        fcv_results = [fcv_of(v) for v in values]
+
+        for index, fcvr in enumerate(fcv_results):
+            if fcvr.is_err():
+                raise Exception(f"Non-FCValue choise {index}: {fcvr.unwrap_err()}")
+
+        fcvs = [fcvr.unwrap() for fcvr in fcv_results]
+        return self.one_of(*fcvs)
+
     @abstractmethod
     def validate(self, value: FCValue) -> Result[FCValue, str]:
         """
