@@ -621,4 +621,3 @@ class FCSchemaStruct(FCSchema):
             lines += schema.translate(prefix + "_" + name, dict_val[name], translator)
 
         return lines
-
