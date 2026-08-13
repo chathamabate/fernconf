@@ -49,13 +49,20 @@ class FCSchema(ABC):
         return FCSchemaWithExtraChecks(self, **checks)
 
     def const(self, value: FCValue) -> FCSchema:
-        validated_value_result = self.validate(value)
+        """
+        This Schema will be given `value` as a default value AND will be given
+        and extra check which refuses all other values!
+        """
 
+        # Frustratingly, this function will actually validate `value` twice.
+        # Once in this function, and a second time when `with_default` executes.
+
+        validated_value_result = self.validate(value)
         if validated_value_result.is_err():
             raise Exception(f"Invalid constant value: {validated_value_result.unwrap_err()}")
-
         validated_value = validated_value_result.unwrap()
-        return self.with_extra_checks(
+
+        return self.with_default(value).with_extra_checks(
             check_const=lambda v: Ok(None) if v == validated_value else Err(f"Constant expected: {validated_value}")
         )
 

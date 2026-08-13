@@ -110,6 +110,41 @@ class TestSimpleComposites:
 
         assert s.validate_any(8) == Ok(8)
 
+    def test_const(self) -> None:
+        s = FCS_INT
+
+        with pytest.raises(Exception):
+            s.const_any(1.4) # Non-FCValue
+
+        s = s.const_any(4)
+        assert s.validate_any(1).is_err()
+        assert s.validate_any(3).is_err()
+        assert s.validate_any(4).is_ok()
+        assert s.default() == Ok(4)
+
+        with pytest.raises(Exception):
+            # Here 3 will fail initial validation as it is not 4!
+            s.const_any(3) 
+
+        # You shouldn't do this, but it still should work!
+        s.const_any(4)
+        
+    def test_one_of(self) -> None:
+        s = FCS_STR
+
+        with pytest.raises(Exception):
+            s.one_of_any("hello", 1.2) # Non-FCValue
+
+        with pytest.raises(Exception):
+            s.one_of_any("hello", 1) # 1 should fail validation
+
+        s = s.one_of_any("a", "b", "c")
+        assert s.validate_any("a") == Ok("a")
+        assert s.validate_any("b") == Ok("b")
+        assert s.validate_any("c") == Ok("c")
+        assert s.validate_any("d").is_err()
+
+
 class TestStandardComposites:
     def test_schema_strict_list(self) -> None:
         s = FCSchemaStrictList(FCS_INT)
