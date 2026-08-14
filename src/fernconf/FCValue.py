@@ -112,7 +112,7 @@ def fcv_get(val: FCValue, *p: str | int) -> FCValue:
         if isinstance(c, int):
             v = cast(list[FCValue], v)[c]
         else:
-            v = cast(dict[str, FCValue], c)
+            v = cast(dict[str, FCValue], v)[c]
         
     return v
 
@@ -122,7 +122,7 @@ def fcv_get_int(val: FCValue, *p: str | int) -> int:
 def fcv_get_bool(val: FCValue, *p: str | int) -> bool:
     return cast(bool, fcv_get(val, *p))
 
-def fcv_get_str(val: FCValue, *p: str | int) -> bool:
+def fcv_get_str(val: FCValue, *p: str | int) -> str:
     return cast(str, fcv_get(val, *p))
 
 def fcv_get_list(val: FCValue, *p: str | int) -> list[FCValue]:

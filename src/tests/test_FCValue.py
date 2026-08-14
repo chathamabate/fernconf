@@ -50,3 +50,24 @@ class TestFCValue:
     def test_fcv_of_bad(self):
         assert fcv_of(3.4).is_err()
 
+    def test_fcv_cast_helpers(self):
+        v = fcv_of({
+            "A": [1, 2, 3],
+            "B": {
+                "C": True,
+                "D": "Hello",
+                "E": [
+                    {"n": 1},
+                    {"n": 2}
+                ]
+            }
+        }).unwrap()
+
+        assert fcv_get(v, "A") == [1, 2, 3]
+        assert fcv_get(v, "B", "C") == True
+        assert fcv_get(v, "A", 1) == 2
+
+        assert fcv_get_int(v, "B", "E", 0, "n") == 1
+        assert fcv_get_str(v, "B", "D") == "Hello"
+        assert fcv_get_list(v, "A") == [1, 2, 3]
+        assert fcv_get_dict(v, "B", "E", 1) == {"n": 2}
