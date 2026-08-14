@@ -90,4 +90,43 @@ def fcv_of(value: Any) -> Result[FCValue, str]:
             return Ok(new_dict)
         case _:
             return Err("FCValues must conform to typedef: int | bool | str | list[FCValue] | dict[str, FCValue]")
+
+# NOTE: The below helpers are really just to help with static type checking.
+# If this module didn't use mypy, these functions wouldn't be necessary.
+
+def fcv_get(val: FCValue, *p: str | int) -> FCValue:
+    """
+    This a helper for traversing an FCValue via fields and indeces which are guaranteed to exist!
+
+    See that this does not return a Result. If a component of `p` doesn't exist, there are no 
+    safeguards. An exception will be thrown.
+
+    The purpose of this function really is to prevent the need for elaborate cast expressions.
+
+    NOTE: If a component of `p` is a string, it is assumed a dictionary is being indexed.
+    If a component of `p` is an integer, it is assumed a list is being indexed!
+    """
+    v = val
+
+    for c in p:
+        if isinstance(c, int):
+            v = cast(list[FCValue], v)[c]
+        else:
+            v = cast(dict[str, FCValue], c)
         
+    return v
+
+def fcv_get_int(val: FCValue, *p: str | int) -> int:
+    return cast(int, fcv_get(val, *p))
+
+def fcv_get_bool(val: FCValue, *p: str | int) -> bool:
+    return cast(bool, fcv_get(val, *p))
+
+def fcv_get_str(val: FCValue, *p: str | int) -> bool:
+    return cast(str, fcv_get(val, *p))
+
+def fcv_get_list(val: FCValue, *p: str | int) -> list[FCValue]:
+    return cast(list[FCValue], fcv_get(val, *p))
+
+def fcv_get_dict(val: FCValue, *p: str | int) -> dict[str, FCValue]:
+    return cast(dict[str, FCValue], fcv_get(val, *p))
