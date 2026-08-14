@@ -112,6 +112,9 @@ def fcv_get(val: FCValue, *p: str | int) -> FCValue:
         if isinstance(c, int):
             v = cast(list[FCValue], v)[c]
         else:
+            if c == "":
+                raise Exception("Empty path component found")
+
             v = cast(dict[str, FCValue], v)[c]
         
     return v
@@ -130,3 +133,4 @@ def fcv_get_list(val: FCValue, *p: str | int) -> list[FCValue]:
 
 def fcv_get_dict(val: FCValue, *p: str | int) -> dict[str, FCValue]:
     return cast(dict[str, FCValue], fcv_get(val, *p))
+

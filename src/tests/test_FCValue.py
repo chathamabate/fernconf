@@ -63,6 +63,7 @@ class TestFCValue:
             }
         }).unwrap()
 
+        assert fcv_get(v) == v
         assert fcv_get(v, "A") == [1, 2, 3]
         assert fcv_get(v, "B", "C") == True
         assert fcv_get(v, "A", 1) == 2
@@ -71,3 +72,12 @@ class TestFCValue:
         assert fcv_get_str(v, "B", "D") == "Hello"
         assert fcv_get_list(v, "A") == [1, 2, 3]
         assert fcv_get_dict(v, "B", "E", 1) == {"n": 2}
+
+        with pytest.raises(Exception):
+            fcv_get(v, "C")
+
+        with pytest.raises(Exception):
+            fcv_get(v, "B", "", "C")
+
+        with pytest.raises(Exception):
+            fcv_get(v, "B", 0, "C")
