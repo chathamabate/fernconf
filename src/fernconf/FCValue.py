@@ -90,4 +90,84 @@ def fcv_of(value: Any) -> Result[FCValue, str]:
             return Ok(new_dict)
         case _:
             return Err("FCValues must conform to typedef: int | bool | str | list[FCValue] | dict[str, FCValue]")
+
+# NOTE: The below helpers are really just to help with static type checking.
+# If this module didn't use mypy, these functions wouldn't be necessary.
+
+def fcv_get(val: FCValue, *p: str | int) -> FCValue:
+    """
+    This a helper for traversing an FCValue via fields and indeces which are guaranteed to exist!
+
+    See that this does not return a Result. If a component of `p` doesn't exist, there are no 
+    safeguards. An exception will be thrown.
+
+    The purpose of this function really is to prevent the need for elaborate cast expressions.
+
+    NOTE: If a component of `p` is a string, it is assumed a dictionary is being indexed.
+    If a component of `p` is an integer, it is assumed a list is being indexed!
+    """
+    v = val
+
+    for c in p:
+        if isinstance(c, int):
+            v = cast(list[FCValue], v)[c]
+        else:
+            if c == "":
+                raise Exception("Empty path component found")
+
+            v = cast(dict[str, FCValue], v)[c]
         
+    return v
+
+def fcv_get_int(val: FCValue, *p: str | int) -> int:
+    return cast(int, fcv_get(val, *p))
+
+def fcv_get_bool(val: FCValue, *p: str | int) -> bool:
+    return cast(bool, fcv_get(val, *p))
+
+def fcv_get_str(val: FCValue, *p: str | int) -> str:
+    return cast(str, fcv_get(val, *p))
+
+def fcv_get_list(val: FCValue, *p: str | int) -> list[FCValue]:
+    return cast(list[FCValue], fcv_get(val, *p))
+
+def fcv_get_dict(val: FCValue, *p: str | int) -> dict[str, FCValue]:
+    return cast(dict[str, FCValue], fcv_get(val, *p))
+
+def fcv_getp(val: FCValue, p_str: str) -> FCValue:
+    """
+    `fcv_getp` is identical to `fcv_get`, it just first translates a string
+    into a list of path components.
+
+    This is done by splitting on ".".
+    Then, if any path component starts with a digit, it is converted to an integer.
+    """
+
+    # We'll say an empty path is allowed, and is a no-op.
+    if p_str == "":
+        return val
+
+    p: list[str | int] = cast(list[str | int], p_str.split("."))
+
+    for i in range(len(p)):
+        c = cast(str, p[i]) # all elements of p start as strings.
+
+        if len(c) == 0:
+            raise Exception(f"Empty path component found in path \"{p_str}\"")
+
+        if ord("0") <= ord(c[0]) and ord(c[0]) <= ord("9"):
+            p[i] = int(c) 
+
+    return fcv_get(val, *p)
+
+def fcv_getp_bool(val: FCValue, p_str: str) -> bool:
+    return cast(bool, fcv_getp(val, p_str))
+
+def fcv_getp_str(val: FCValue, p_str: str) -> str:
+    return cast(str, fcv_getp(val, p_str))
+
+def fcv_getp_list(val: FCValue, p_str: str) -> list[FCValue]:
+    return cast(list[FCValue], fcv_getp(val, p_str))
+
+def fcv_getp_dict(val: FCValue, p_str: str) -> dict[str, FCValue]:
+    return cast(dict[str, FCValue], fcv_getp(val, p_str))

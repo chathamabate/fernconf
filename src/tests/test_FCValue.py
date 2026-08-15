@@ -50,3 +50,73 @@ class TestFCValue:
     def test_fcv_of_bad(self):
         assert fcv_of(3.4).is_err()
 
+class TestFCValueCastHelpers:
+    def test_fcv_get(self):
+        v = fcv_of({
+            "A": [1, 2, 3],
+            "B": {
+                "C": True,
+                "D": "Hello",
+                "E": [
+                    {"n": 1},
+                    {"n": 2}
+                ]
+            }
+        }).unwrap()
+
+        assert fcv_get(v) == v
+        assert fcv_get(v, "A") == [1, 2, 3]
+        assert fcv_get(v, "B", "C") == True
+        assert fcv_get(v, "A", 1) == 2
+
+        assert fcv_get_int(v, "B", "E", 0, "n") == 1
+        assert fcv_get_str(v, "B", "D") == "Hello"
+        assert fcv_get_list(v, "A") == [1, 2, 3]
+        assert fcv_get_dict(v, "B", "E", 1) == {"n": 2}
+
+        with pytest.raises(Exception):
+            fcv_get(v, "C")
+
+        with pytest.raises(Exception):
+            fcv_get(v, "B", "", "C")
+
+        with pytest.raises(Exception):
+            fcv_get(v, "B", 0, "C")
+
+    def test_fcv_getp(self):
+        v = fcv_of([
+            {
+                "A": [1, 2, 3],
+                "B": False,
+                "C": {
+                    "Name": "Bob"
+                }
+            },
+            {
+                "A": [3],
+                "B": True,
+                "C": {
+                    "Name": "Dale"
+                }
+            }
+        ]).unwrap()
+
+        assert fcv_getp(v, "") == v
+        assert fcv_getp_bool(v, "0.B") == False
+
+        assert fcv_getp_dict(v, "1") == {
+            "A": [3],
+            "B": True,
+            "C": {
+                "Name": "Dale"
+            }
+        }
+
+        assert fcv_getp_list(v, "1.A") == [3]
+        assert fcv_getp_str(v, "1.C.Name") == "Dale"
+
+        with pytest.raises(Exception):
+            fcv_getp(v, "..")
+
+        with pytest.raises(Exception):
+            fcv_getp(v, "1.D")
