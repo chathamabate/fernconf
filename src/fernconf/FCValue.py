@@ -134,3 +134,35 @@ def fcv_get_list(val: FCValue, *p: str | int) -> list[FCValue]:
 def fcv_get_dict(val: FCValue, *p: str | int) -> dict[str, FCValue]:
     return cast(dict[str, FCValue], fcv_get(val, *p))
 
+def fcv_getp(val: FCValue, p_str: str) -> FCValue:
+    """
+    `fcv_getp` is identical to `fcv_get`, it just first translates a string
+    into a list of path components.
+
+    This is done by splitting on ".".
+    Then, if any path component starts with a digit, it is converted to an integer.
+    """
+    p: list[str | int] = cast(list[str | int], p_str.split("."))
+
+    for i in range(len(p)):
+        c = cast(str, p[i]) # all elements of p start as strings.
+
+        if len(c):
+            raise Exception(f"Empty path component found in path \"{p}\"")
+
+        if ord("0") <= ord(c[0]) and ord(c[0]) <= ord("9"):
+            p[i] = int(c) 
+
+    return fcv_get(val, *p)
+
+def fcv_getp_bool(val: FCValue, p_str: str) -> bool:
+    return cast(bool, fcv_getp(val, p_str))
+
+def fcv_getp_str(val: FCValue, p_str: str) -> str:
+    return cast(str, fcv_getp(val, p_str))
+
+def fcv_getp_list(val: FCValue, p_str: str) -> list[FCValue]:
+    return cast(list[FCValue], fcv_getp(val, p_str))
+
+def fcv_getp_dict(val: FCValue, p_str: str) -> dict[str, FCValue]:
+    return cast(dict[str, FCValue], fcv_getp(val, p_str))
