@@ -142,13 +142,18 @@ def fcv_getp(val: FCValue, p_str: str) -> FCValue:
     This is done by splitting on ".".
     Then, if any path component starts with a digit, it is converted to an integer.
     """
+
+    # We'll say an empty path is allowed, and is a no-op.
+    if p_str == "":
+        return val
+
     p: list[str | int] = cast(list[str | int], p_str.split("."))
 
     for i in range(len(p)):
         c = cast(str, p[i]) # all elements of p start as strings.
 
-        if len(c):
-            raise Exception(f"Empty path component found in path \"{p}\"")
+        if len(c) == 0:
+            raise Exception(f"Empty path component found in path \"{p_str}\"")
 
         if ord("0") <= ord(c[0]) and ord(c[0]) <= ord("9"):
             p[i] = int(c) 
