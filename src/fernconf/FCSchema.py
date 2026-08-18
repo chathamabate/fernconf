@@ -7,6 +7,13 @@ from abc import ABC, abstractmethod
 from typing import Any, override, cast, Callable
 from result import Ok, Err, Result, do
 
+type FCExtraCheck = Callable[[FCValue], Result[None, str]]
+"""
+This type can be used to augment FCSchema.
+
+An FCExtraCheck should return Ok(None) on success and Err(error msg) on failure.
+"""
+
 class FCSchema(ABC):
     """
     An FCSchema is way of confirming an FCValue conforms to certain custom rules!
@@ -45,7 +52,7 @@ class FCSchema(ABC):
 
         return self.with_default(default_fcv.unwrap())
 
-    def with_extra_checks(self, **checks: Callable[[FCValue], Result[None, str]]) -> FCSchema:
+    def with_extra_checks(self, **checks: FCExtraCheck) -> FCSchema:
         return FCSchemaWithExtraChecks(self, **checks)
 
     def const(self, value: FCValue) -> FCSchema:
@@ -233,7 +240,7 @@ class FCSchemaWithExtraChecks(FCSchemaWrapper):
     the need of creating a whole new class!
     """
 
-    def __init__(self, schema: FCSchema, **checks: Callable[[FCValue], Result[None, str]]):
+    def __init__(self, schema: FCSchema, **checks: FCExtraCheck):
         """
         If `schema` has a default value, it will be checked here in this constructor.
         An exception will be raised if the default value does not conform to the 
