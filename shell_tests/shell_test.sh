@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # To run this script, make sure you are in a python virtual environment with
 # fernconf installed!

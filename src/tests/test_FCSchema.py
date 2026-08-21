@@ -82,7 +82,7 @@ class TestSimpleComposites:
         s = FCS_INT
         assert s.validate_any(1) == Ok(1)
 
-        s = s.with_extra_checks(even_check=lambda v: Ok(None) if cast(int, v) % 2 == 0 else Err("Must be even"))
+        s = s.with_extra_checks(even_check=lambda v: Ok(None) if cast(int, v) % 2 == 0 else fce_line("Must be even"))
         assert s.validate_any(1).is_err()
 
         with pytest.raises(Exception):
@@ -90,11 +90,11 @@ class TestSimpleComposites:
 
         s = s.with_default_any(2)
         with pytest.raises(Exception):
-            s.with_extra_checks(not_two=lambda v: Ok(None) if v != 2 else Err("Cannot be two"))
+            s.with_extra_checks(not_two=lambda v: Ok(None) if v != 2 else fce_line("Cannot be two"))
 
         s = s.with_extra_checks(
-            not_four=lambda v: Ok(None) if v != 4 else Err("Cannot be four"),
-            not_six=lambda v: Ok(None) if v != 6 else Err("Cannot be six") 
+            not_four=lambda v: Ok(None) if v != 4 else fce_line("Cannot be four"),
+            not_six=lambda v: Ok(None) if v != 6 else fce_line("Cannot be six") 
         )
 
         assert s.validate_any("Hello").is_err()
@@ -303,7 +303,7 @@ class TestBigComposites:
                 FCSchemaStruct([
                     ("location", FCS_STR),
                     ("population", FCS_INT.with_extra_checks(
-                        not_empty=lambda pop: Ok(None) if cast(int, pop) > 0 else Err("value must be positive non-zero")
+                        not_empty=lambda pop: Ok(None) if cast(int, pop) > 0 else fce_line("value must be positive non-zero")
                     ))
                 ])
             ))
@@ -338,7 +338,7 @@ class TestBigComposites:
 
     def test_big_schema1(self) -> None:
         sr = FCSchemaStrictList(FCS_INT, 2, 2).with_extra_checks(
-            range_check=lambda v: Ok(None) if cast(list[int], v)[0] <= cast(list[int], v)[1] else Err("invalid bounds")
+            range_check=lambda v: Ok(None) if cast(list[int], v)[0] <= cast(list[int], v)[1] else fce_line("invalid bounds")
         ).with_default_any([0, 0])
 
         s = FCSchemaStruct([
@@ -419,7 +419,7 @@ class TestBigComposites:
                 ("end", FCS_INT)
             ], 
             length=(FCS_INT, lambda v: cast(dict[str, int], v)["end"] - cast(dict[str, int], v)["start"])
-        ).with_extra_checks(valid_range=lambda v: Ok(None) if cast(dict[str, int], v)["length"] >= 0 else Err("Invalid Range!"))
+        ).with_extra_checks(valid_range=lambda v: Ok(None) if cast(dict[str, int], v)["length"] >= 0 else fce_line("Invalid Range!"))
 
         s = FCSchemaStrictList(FCSchemaStruct(
             [
