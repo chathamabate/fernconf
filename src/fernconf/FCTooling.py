@@ -39,7 +39,8 @@ def run_fernconf(schema: FCSchema, prefix: str="FC", **translators: FCTranslator
 
     if fcv_res.is_err():
         print(f"Failed to parse and validate FCValue from {fn}")
-        print(fcv_res.unwrap_err())
+        for line in fcv_res.unwrap_err():
+            print(line)
         exit(1)
 
     fcv = fcv_res.unwrap()
