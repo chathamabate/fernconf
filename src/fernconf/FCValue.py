@@ -9,6 +9,9 @@ type FCErrorMessage = list[str]
 def fcem_line(line: str) -> FCErrorMessage:
     return [line]
 
+def fcem_line_err(line: str) -> Err[FCErrorMessage]:
+    return Err(fcem_line(line))
+
 def fcem_prepend_lines(lines: FCErrorMessage, old_lines: FCErrorMessage) -> FCErrorMessage:
     """
     Returns a new error message which equals lines + old_lines where old lines are all tabbed
@@ -16,9 +19,14 @@ def fcem_prepend_lines(lines: FCErrorMessage, old_lines: FCErrorMessage) -> FCEr
     """
     return lines + ["  " + ol for ol in old_lines]
 
-def fcem_prepend_line(line: str, old_lines: FCErrorMessage) -> FCErrorMessage:
-    return fcem_prepend_lines(fcem_line(line), FCErrorMessage)
+def fcem_prepend_lines_err(lines: FCErrorMessage, old_err: Err[FCErrorMessage]) -> Err[FCErrorMessage]:
+    return Err(fcem_prepend_lines(lines, old_err.unwrap_err()))
 
+def fcem_prepend_line(line: str, old_lines: FCErrorMessage) -> FCErrorMessage:
+    return fcem_prepend_lines(fcem_line(line), old_lines)
+
+def fcem_prepend_line_err(line: str, old_err: Err[FCErrorMessage]) -> Err[FCErrorMessage]:
+    return fcem_prepend_lines_err(fcem_line(line), old_err)
 
 FC_ID_PATTERN: re.Pattern = re.compile("[A-Za-z_][A-Za-zZ0-9_]*")
 """ 
@@ -43,10 +51,10 @@ def fcv_int_check_result(value: int) -> Result[int, FCErrorMessage]:
     unsigned integer!
     """
     if value < -0x8000_0000_0000_0000:
-        return fcem_line(f"Given value exceeds 64-bit negative bound {str(value)}")
+        return fcem_line_err(f"Given value exceeds 64-bit negative bound {str(value)}")
 
     if value >= 0x1_0000_0000_0000_0000:
-        return fcem_line(f"Given value exceends 64-bit unsigned positive bound {str(value)}")
+        return fcem_line_err(f"Given value exceends 64-bit unsigned positive bound {str(value)}")
 
     return Ok(value)
 
@@ -86,32 +94,32 @@ def fcv_of(value: Any) -> Result[FCValue, FCErrorMessage]:
                     case Ok(new_val):
                         new_list.append(new_val)
                     case Err(msg):
-                        return fcem_prepend_line(
+                        return Err(fcem_prepend_line(
                             f"Error at list index [{i}]",
                             msg
-                        )
+                        ))
             return Ok(new_list)
         case dict():
             new_dict: dict[str, FCValue] = {}
             for k, v in value.items():
                 if not isinstance(k, str):
-                    return fcem_line("dict values must only have string keys")
+                    return fcem_line_err("dict values must only have string keys")
 
                 if not FC_ID_PATTERN.fullmatch(k):
-                    return fcem_line(f"dict key name does not conform to FCValue regex: \"{k}\"")
+                    return fcem_line_err(f"dict key name does not conform to FCValue regex: \"{k}\"")
 
                 match fcv_of(v):
                     case Ok(new_val):
                         new_dict[k] = new_val
                     case Err(msg):
-                        return fcem_prepend_line(
+                        return Err(fcem_prepend_line(
                             f"Error a dict key [\"{k}\"]",
                             msg
-                        )
+                        ))
 
             return Ok(new_dict)
         case _:
-            return fcem_line("FCValues must conform to typedef: int | bool | str | list[FCValue] | dict[str, FCValue]")
+            return fcem_line_err("FCValues must conform to typedef: int | bool | str | list[FCValue] | dict[str, FCValue]")
 
 # NOTE: The below helpers are really just to help with static type checking.
 # If this module didn't use mypy, these functions wouldn't be necessary.
