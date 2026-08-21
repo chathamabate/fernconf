@@ -19,13 +19,13 @@ def fcem_prepend_lines(lines: FCErrorMessage, old_lines: FCErrorMessage) -> FCEr
     """
     return lines + ["  " + ol for ol in old_lines]
 
-def fcem_prepend_lines_err(lines: FCErrorMessage, old_err: Err[FCErrorMessage]) -> Err[FCErrorMessage]:
+def fcem_prepend_lines_err(lines: FCErrorMessage, old_err: Result[Any, FCErrorMessage]) -> Err[FCErrorMessage]:
     return Err(fcem_prepend_lines(lines, old_err.unwrap_err()))
 
 def fcem_prepend_line(line: str, old_lines: FCErrorMessage) -> FCErrorMessage:
     return fcem_prepend_lines(fcem_line(line), old_lines)
 
-def fcem_prepend_line_err(line: str, old_err: Err[FCErrorMessage]) -> Err[FCErrorMessage]:
+def fcem_prepend_line_err(line: str, old_err: Result[Any, FCErrorMessage]) -> Err[FCErrorMessage]:
     return fcem_prepend_lines_err(fcem_line(line), old_err)
 
 FC_ID_PATTERN: re.Pattern = re.compile("[A-Za-z_][A-Za-zZ0-9_]*")
@@ -90,14 +90,16 @@ def fcv_of(value: Any) -> Result[FCValue, FCErrorMessage]:
         case list():
             new_list: list[FCValue] = []
             for i, v in enumerate(value):
-                match fcv_of(v):
-                    case Ok(new_val):
-                        new_list.append(new_val)
-                    case Err(msg):
-                        return Err(fcem_prepend_line(
-                            f"Error at list index [{i}]",
-                            msg
-                        ))
+                nvr = fcv_of(v) 
+
+                if nvr.is_err():
+                    return fcem_prepend_line_err(
+                        f"Error at list index [{i}]",
+                        nvr
+                    )
+
+                new_list.append(nvr.unwrap())
+
             return Ok(new_list)
         case dict():
             new_dict: dict[str, FCValue] = {}
@@ -108,14 +110,15 @@ def fcv_of(value: Any) -> Result[FCValue, FCErrorMessage]:
                 if not FC_ID_PATTERN.fullmatch(k):
                     return fcem_line_err(f"dict key name does not conform to FCValue regex: \"{k}\"")
 
-                match fcv_of(v):
-                    case Ok(new_val):
-                        new_dict[k] = new_val
-                    case Err(msg):
-                        return Err(fcem_prepend_line(
-                            f"Error a dict key [\"{k}\"]",
-                            msg
-                        ))
+                nvr = fcv_of(v)
+
+                if nvr.is_err():
+                    return fcem_prepend_line_err(
+                        f"Error a dict key [\"{k}\"]",
+                        nvr
+                    )
+
+                new_dict[k] = nvr.unwrap()
 
             return Ok(new_dict)
         case _:
