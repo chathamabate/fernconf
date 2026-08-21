@@ -72,7 +72,7 @@ expect_succeed() {
 }
 
 expect_fail() {
-    echo -e "Expect ${BRIGHT_BLACK}Fail${RESET} : ${BRIGHT_BLACK}$*${RESET}"
+    echo -e "Expect Fail : ${BRIGHT_BLACK}$*${RESET}"
 
     (($*) 2>&1) > /dev/null
 
