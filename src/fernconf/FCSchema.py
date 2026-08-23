@@ -295,7 +295,7 @@ class FCSchemaWithExtraChecks(FCSchemaWrapper):
         v = res.unwrap()
         
         check_res = FCSchemaWithExtraChecks.perform_checks(v, **self.checks)
-        return check_res.map(lambda n: Ok(v))
+        return check_res.map(lambda n: v)
 
 #
 # Primitive types
@@ -448,7 +448,7 @@ class FCSchemaStrictDict(FCSchema):
                 success = False
                 err_msg += prepend_and_tab(
                     [f"StrictDict Error @ key \"{k}\""],
-                    err_msg.unwrap_err()
+                    new_v.unwrap_err()
                 )
             elif success:
                 new_value[k] = new_v.unwrap()
@@ -610,7 +610,7 @@ class FCSchemaStruct(FCSchema):
         self.fields_dict: dict[str, FCSchema] = {}
 
         # First confirm all field names are valid! (Creating fields dict while we go)
-        for (field, schema) in self.fields_list 
+        for (field, schema) in self.fields_list:
             if not FC_ID_PATTERN.fullmatch(field):
                 raise Exception(f"FCSchemaStruct field name is invalid \"{field}\"")
             
@@ -634,7 +634,7 @@ class FCSchemaStruct(FCSchema):
         # To create the default, we ask for the default value from all explicit field schema.
         # If all those schema have defaults, then the resulting value is passed to the derived
         # value functions! 
-        dvr = FCSchemaStruct._fill_in_dict({}, self.fields_dict))
+        dvr = FCSchemaStruct._fill_in_dict({}, self.fields_dict)
         if dvr.is_ok():
             dvr = Ok(FCSchemaStruct._append_derived(dvr.unwrap(), self.derived_dict))
 
