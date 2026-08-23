@@ -27,13 +27,13 @@ class FCSchema(ABC):
         """
         return FCSchemaWithExtraTranslates(self, *extra_translates)
 
-    def default(self) -> Result[FCValue, str]:
+    def default(self) -> Result[FCValue, list[str]]:
         """
         Here more than ever, make sure that the value returned is not changed!
         It is completely legal for a Schema to have a single default object it always returns
         a reference to!
         """
-        return Err("Given schema provides no default FCValue")
+        return Err(["Given schema provides no default FCValue"])
 
     def with_default(self, default_value: FCValue) -> FCSchema:
         return FCSchemaWithDefault(self, default_value)
@@ -45,7 +45,7 @@ class FCSchema(ABC):
 
         return self.with_default(default_fcv.unwrap())
 
-    def with_extra_checks(self, **checks: Callable[[FCValue], Result[None, str]]) -> FCSchema:
+    def with_extra_checks(self, **checks: Callable[[FCValue], Result[None, list[str]]]) -> FCSchema:
         return FCSchemaWithExtraChecks(self, **checks)
 
     def const(self, value: FCValue) -> FCSchema:
@@ -68,7 +68,7 @@ class FCSchema(ABC):
         #
         # NOTE: Realize, that the internal default values of `self` still exist!
         return self.with_default(value).with_extra_checks(
-            check_const=lambda v: Ok(None) if v == validated_value else Err(f"Constant expected: {validated_value}")
+            check_const=lambda v: Ok(None) if v == validated_value else Err([f"Constant expected: {validated_value}"])
         )
 
     def const_any(self, value: Any) -> FCSchema:
@@ -96,7 +96,7 @@ class FCSchema(ABC):
 
         validated_values = [vvr.unwrap() for vvr in validated_value_results]
         return self.with_default(values[0]).with_extra_checks(
-            check_one_of=lambda v: Ok(None) if v in validated_values else Err(f"Value not one of: {validated_values}")
+            check_one_of=lambda v: Ok(None) if v in validated_values else Err([f"Value not one of: {validated_values}"])
         )
 
     def one_of_any(self, *values: Any):
@@ -110,7 +110,7 @@ class FCSchema(ABC):
         return self.one_of(*fcvs)
 
     @abstractmethod
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         """
         validate takes as input a FCValue and confirms that it abides by implementation 
         specific rules.
@@ -122,11 +122,13 @@ class FCSchema(ABC):
         """
         pass
 
-    def validate_any(self, value: Any) -> Result[FCValue, str]:
-        return do(
-            self.validate(fcv)
-            for fcv in fcv_of(value)
-        )
+    def validate_any(self, value: Any) -> Result[FCValue, list[str]]:
+        fcv_res = fcv_of(value)
+
+        if fcv_res.is_err():
+            return fcv_res
+
+        return self.validate(fcv_res.unwrap())
 
     @abstractmethod
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
@@ -165,11 +167,11 @@ class FCSchemaWrapper(FCSchema):
         self.inner = inner
 
     @override
-    def default(self) -> Result[FCValue, str]:
+    def default(self) -> Result[FCValue, list[str]]:
         return self.inner.default()
 
     @override
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         return self.inner.validate(value)
 
     @override
@@ -224,7 +226,7 @@ class FCSchemaWithDefault(FCSchemaWrapper):
         self.default_value = valid_default.unwrap() 
     
     @override
-    def default(self) -> Result[FCValue, str]:
+    def default(self) -> Result[FCValue, list[str]]:
         return Ok(self.default_value)
 
 class FCSchemaWithExtraChecks(FCSchemaWrapper):
@@ -233,7 +235,31 @@ class FCSchemaWithExtraChecks(FCSchemaWrapper):
     the need of creating a whole new class!
     """
 
-    def __init__(self, schema: FCSchema, **checks: Callable[[FCValue], Result[None, str]]):
+    @staticmethod
+    def perform_checks(value: FCValue, **checks: Callable[[FCValue], Result[None, list[str]]]) -> Result[None, list[str]]:
+        """
+        Helper for performing a set of named checks on an FCValue!
+
+        NOTE: Even in error case, this will perform ALL checks. The intention is to give as 
+        detailed an error message as possible!
+        """
+        
+        success = True
+        err_msg = []
+
+        for check_name, check in checks.items():
+            result = check(value)
+
+            if result.is_err():
+                success = False
+                err_msg += prepend_and_tab(
+                    [f"Error @ check \"{check_name}\""],
+                    result.unwrap_err()
+                )
+        
+        return Ok(None) if success else Err(err_msg)
+
+    def __init__(self, schema: FCSchema, **checks: Callable[[FCValue], Result[None, list[str]]]):
         """
         If `schema` has a default value, it will be checked here in this constructor.
         An exception will be raised if the default value does not conform to the 
@@ -249,23 +275,27 @@ class FCSchemaWithExtraChecks(FCSchemaWrapper):
         dv_res = schema.default()
         if dv_res.is_ok(): # We only check default, if the wrapped schema even has a default!
             dv = dv_res.unwrap()
-            for check_name, check in self.checks.items():
-                check_res = check(dv)
-                if check_res.is_err():
-                    raise Exception(f"Default value failed check \"{check_name}\": {check_res.unwrap_err()}")
+            dv_check_res = FCSchemaWithExtraChecks.perform_checks(dv, **checks)
+
+            if dv_check_res.is_err():
+                raise Exception("\n".join(
+                    prepend_and_tab(["Default value failed checks"],
+                        dv_check_res.unwrap_err()
+                    )
+                ))
+
     @override
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         res = super().validate(value)
+        
+        if res.is_err():
+            return res
 
         # Always perform extra checks AFTER initial validation!
-        if res.is_ok():
-            v = res.unwrap()
-            for check_name, check in self.checks.items():
-                check_res = check(v)
-                if check_res.is_err():
-                    return Err(f"Value failed check \"{check_name}\": {check_res.unwrap_err()}")
-
-        return res
+        v = res.unwrap()
+        
+        check_res = FCSchemaWithExtraChecks.perform_checks(v, **self.checks)
+        return check_res.map(lambda n: Ok(v))
 
 #
 # Primitive types
@@ -273,7 +303,7 @@ class FCSchemaWithExtraChecks(FCSchemaWrapper):
 
 class FCSchemaBool(FCSchema):
     @override 
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         if not isinstance(value, bool):
             return Err(f"Given value is not of type bool")
 
@@ -287,7 +317,7 @@ FCS_BOOL: FCSchema = FCSchemaBool()
 
 class FCSchemaInt(FCSchema):
     @override 
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         match value:
             case int():
                 # Given `value` is a valid FCValue. 
@@ -314,7 +344,7 @@ FCS_INT: FCSchema = FCSchemaInt()
 
 class FCSchemaStr(FCSchema):
     @override 
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         if not isinstance(value, str):
             return Err(f"Given value is not of type str")
 
@@ -350,7 +380,7 @@ class FCSchemaStrictList(FCSchema):
             raise Exception(f"Invalid element count constraints ({str(min_eles)}, {str(max_eles)})")
 
     @override 
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         if not isinstance(value, list):
             return Err(f"Given value is not of type list")
         
@@ -392,7 +422,7 @@ class FCSchemaStrictDict(FCSchema):
         self.ele_schema = ele_schema
 
     @override 
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         if not isinstance(value, dict):
             return Err("Given value is not of type dict")
 
@@ -494,7 +524,7 @@ class FCSchemaStruct(FCSchema):
             dv |= derived_fvs
 
     @override
-    def default(self) -> Result[FCValue, str]:
+    def default(self) -> Result[FCValue, list[str]]:
         return self.default_result 
 
     def _validate_list(self, value: list[FCValue]) -> Result[dict[str, FCValue], str]:
@@ -561,7 +591,7 @@ class FCSchemaStruct(FCSchema):
         return Ok(new_value)
 
     @override 
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         """
         While both list or dict FCValues are accepted by this function, only a dict is ever 
         returned!
