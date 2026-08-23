@@ -88,25 +88,51 @@ class FCSchema(ABC):
         if len(values) == 0:
             raise Exception("Must be given at least 1 choice for one_of")
 
-        validated_value_results = [self.validate(v) for v in values]
+        vvs = []
+        err_msg = []
+        success = True
 
-        for index, vvr in enumerate(validated_value_results):
+        for i, v in enumerate(values):
+            vvr = self.validate(v)
             if vvr.is_err():
-                raise Exception(f"Invalid choice {index}: {vvr.unwrap_err()}")
+                success = False
+                err_msg += prepend_and_tab(
+                    [f"Invalid choice @ index {i}"],
+                    vvr.unwrap_err()
+                )
+            elif success:
+                vvs.append(vvr.unwrap())
 
-        validated_values = [vvr.unwrap() for vvr in validated_value_results]
+        if not success:
+            raise Exception("\n".join(err_msg))
+
         return self.with_default(values[0]).with_extra_checks(
-            check_one_of=lambda v: Ok(None) if v in validated_values else Err([f"Value not one of: {validated_values}"])
+            check_one_of=lambda v: Ok(None) if v in vvs else Err(prepend_and_tab(
+                [f"Given value {v} not in list of valid choices"],
+                [str(vv) for vv in vvs]
+            ))
         )
 
-    def one_of_any(self, *values: Any):
-        fcv_results = [fcv_of(v) for v in values]
+    def one_of_any(self, *values: Any) -> FCSchema:
+        fcvs = []
+        err_msg = []
+        success = True
 
-        for index, fcvr in enumerate(fcv_results):
-            if fcvr.is_err():
-                raise Exception(f"Non-FCValue choise {index}: {fcvr.unwrap_err()}")
+        for index, v in enumerate(values):
+            rv = fcv_of(v)
 
-        fcvs = [fcvr.unwrap() for fcvr in fcv_results]
+            if rv.is_err():
+                success = False
+                err_msg += prepend_and_tab(
+                    [f"Non-FCValue choice @ index {index}"],
+                    rv.unwrap_err()
+                )
+            elif success:
+                fcvs.append(rv.unwrap())
+
+        if not success:
+            raise Exception("\n".join(err_msg))
+
         return self.one_of(*fcvs)
 
     @abstractmethod
@@ -219,7 +245,11 @@ class FCSchemaWithDefault(FCSchemaWrapper):
 
         valid_default = schema.validate(default_value)
         if valid_default.is_err():
-            raise Exception(f"Default value failed self validation: {valid_default.unwrap_err()}")
+            err_msg = prepend_and_tab(
+                ["Default value failed self validation"],
+                valid_default.unwrap_err()
+            )
+            raise Exception("\n".join(err_msg))
 
         # Remember, `self.default_value` may contain more than what is provided in 
         # `default_value`. `schema.validate` may populate it with unspecified fields!
