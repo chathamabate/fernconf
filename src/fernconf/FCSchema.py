@@ -467,6 +467,94 @@ class FCSchemaStrictDict(FCSchema):
 
 
 class FCSchemaStruct(FCSchema):
+
+    @staticmethod
+    def _fill_in_list(fvs: list[FCValue], fields: list[tuple[str, FCSchema]]) -> Result[dict[str, FCValue], list[str]]:
+        """
+        Helper method, given a list of value and a list of fields which should exist, 
+        validate given fields and fill in missing fields, and return as a dictionary!
+
+        NOTE: this function is private as it does not validate that field names in 'fields' are
+        valid!
+        """
+
+        if len(fvs) > len(fields):
+            return Err([f"Given {len(fvs)} fields, but expected <= {len(fields)}"])
+
+        new_value = {}
+        err_msg = []
+        success = True
+
+        for i, given_value in enumerate(fvs):
+            field_name, field_schema = fields[i]
+            rv = field_schema.validate(given_value) 
+            if rv.is_err():
+                success = False
+                err_msg += prepend_and_tab(
+                    [f"Error validating struct field \"{field_name}\""],
+                    rv.unwrap_err()
+                )
+            elif success:
+                new_value[field_name] = rv.unwrap()
+
+        # Ok, now try to add defaults of fields not given
+        for i in range(len(fvs), len(fields)):
+            field_name, field_schema = fields[i]
+            rv = field_schema.default()
+            if rv.is_err():
+                success = False
+                err_msg += [f"Require field not specified \"{field_name}\""]
+            elif success: 
+                new_value[field_name] = rv.unwrap()
+
+        return Ok(new_value) if success else Err(err_msg)
+
+
+    @staticmethod
+    def _fill_in_dict(fvs: dict[str, FCValue], fields: dict[str, FCSchema]) -> Result[dict[str, FCValue], list[str]]:
+        """
+        Helper method, given a dictionary of values, and a dictionary of fields validate given
+        fields and filli n missing fields.
+
+        (Realize this doesn't need a list of fields, as order is not needed in this case)
+        
+        Private as field name regex match is not applied to `fields`.
+        """
+
+        new_value = {}
+        err_msg = []
+        success = True
+
+        for field_name, field_value in fvs.items():
+            if field_name not in fields:
+                success = False
+                err_msg += [f"Unknown field provided \"{field_name}\""]
+            else:
+                field_schema = fields[field_name]
+                rv = field_schema.validate(field_value)
+                if rv.is_err():
+                    success = False
+                    err_msg += prepend_and_tab(
+                        [f"Error validating struct field \"{field_name}\""],
+                        rv.unwrap_err()
+                    )
+                elif success:
+                    new_value[field_name] = rv.unwrap()
+
+        # Ok, now for unprovided fields
+        for field_name, field_schema in fields.items():
+            if field_name not in fvs:
+                rv = field_schema.default()
+                if rv.is_err():
+                    success = False
+                    err_msg += [f"Required field not specified \"{field_name}\""]
+                elif success:
+                    new_value[field_name] = rv.unwrap()
+
+        return Ok(new_value) if success else Err(err_msg)
+
+
+
     def __init__(self, fields: list[tuple[str, FCSchema]], 
                  **derived: tuple[FCSchema, Callable[[FCValue], FCValue]]):
         """
