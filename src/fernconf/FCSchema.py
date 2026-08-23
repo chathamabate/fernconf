@@ -305,7 +305,7 @@ class FCSchemaBool(FCSchema):
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         if not isinstance(value, bool):
-            return Err(f"Given value is not of type bool")
+            return Err([f"Given value is not of type bool"])
 
         return Ok(value)
 
@@ -331,10 +331,10 @@ class FCSchemaInt(FCSchema):
                     # `iv` can be any integer value at this point, must do bounds check!
                     return fcv_int_check_result(iv)
                 except ValueError:
-                    return Err(f"String could not be parsed as hex \"{value}\"")
+                    return Err([f"String could not be parsed as hex \"{value}\""])
 
             case _:
-                return Err(f"Given value cannot be interpreted as an int")
+                return Err([f"Given value cannot be interpreted as an int"])
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
@@ -346,7 +346,7 @@ class FCSchemaStr(FCSchema):
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         if not isinstance(value, str):
-            return Err(f"Given value is not of type str")
+            return Err([f"Given value is not of type str"])
 
         return Ok(value)
 
@@ -382,26 +382,36 @@ class FCSchemaStrictList(FCSchema):
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         if not isinstance(value, list):
-            return Err(f"Given value is not of type list")
+            return Err([f"Given value is not of type list"])
         
         list_value = cast(list[FCValue], value)
         ele_count = len(list_value)
 
         if ele_count < self.min_eles:
-            return Err(f"Given list has too few elements")
+            return Err([f"Given list has too few elements"])
 
         if ele_count > self.max_eles and self.max_eles != 0:
-            return Err(f"Given list has too many elements")
+            return Err([f"Given list has too many elements"])
         
         new_value = []
+        err_msg = []
+        success = True
+
         for i in range(ele_count):
             child_res = self.ele_schema.validate(list_value[i])
             if child_res.is_err():
-                return child_res.map_err(lambda msg: f"Error @ index {str(i)}: {msg}")
+                success = False
+                err_msg += prepend_and_tab(
+                    [f"StrictList Error @ index {str(i)}"],
+                    child_res.unwrap_err()
+                )
 
-            new_value.append(child_res.unwrap())
+            # We only add to new_value if there's a chance it will be returned.
+            # If success if False, we have already hit an error, and this is impossible.
+            elif success: 
+                new_value.append(child_res.unwrap())
 
-        return Ok(new_value)
+        return Ok(new_value) if success else Err(err_msg)
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
@@ -424,18 +434,26 @@ class FCSchemaStrictDict(FCSchema):
     @override 
     def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         if not isinstance(value, dict):
-            return Err("Given value is not of type dict")
+            return Err(["Given value is not of type dict"])
 
         dict_value = cast(dict[str, FCValue], value)
 
         new_value = {}
+        err_msg = []
+        success = True
+
         for k, v in dict_value.items():
             new_v = self.ele_schema.validate(v)
             if new_v.is_err():
-                return new_v.map_err(lambda msg: f"Error @ key \"{k}\": {msg}")
-            new_value[k] = new_v.unwrap()
+                success = False
+                err_msg += prepend_and_tab(
+                    [f"StrictDict Error @ key \"{k}\""],
+                    err_msg.unwrap_err()
+                )
+            elif success:
+                new_value[k] = new_v.unwrap()
 
-        return Ok(new_value)
+        return Ok(new_value) if success else Err(err_msg)
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
