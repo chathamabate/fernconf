@@ -27,13 +27,13 @@ class FCSchema(ABC):
         """
         return FCSchemaWithExtraTranslates(self, *extra_translates)
 
-    def default(self) -> Result[FCValue, str]:
+    def default(self) -> Result[FCValue, list[str]]:
         """
         Here more than ever, make sure that the value returned is not changed!
         It is completely legal for a Schema to have a single default object it always returns
         a reference to!
         """
-        return Err("Given schema provides no default FCValue")
+        return Err(["Given schema provides no default FCValue"])
 
     def with_default(self, default_value: FCValue) -> FCSchema:
         return FCSchemaWithDefault(self, default_value)
@@ -45,7 +45,7 @@ class FCSchema(ABC):
 
         return self.with_default(default_fcv.unwrap())
 
-    def with_extra_checks(self, **checks: Callable[[FCValue], Result[None, str]]) -> FCSchema:
+    def with_extra_checks(self, **checks: Callable[[FCValue], Result[None, list[str]]]) -> FCSchema:
         return FCSchemaWithExtraChecks(self, **checks)
 
     def const(self, value: FCValue) -> FCSchema:
@@ -68,7 +68,7 @@ class FCSchema(ABC):
         #
         # NOTE: Realize, that the internal default values of `self` still exist!
         return self.with_default(value).with_extra_checks(
-            check_const=lambda v: Ok(None) if v == validated_value else Err(f"Constant expected: {validated_value}")
+            check_const=lambda v: Ok(None) if v == validated_value else Err([f"Constant expected: {validated_value}"])
         )
 
     def const_any(self, value: Any) -> FCSchema:
@@ -88,29 +88,55 @@ class FCSchema(ABC):
         if len(values) == 0:
             raise Exception("Must be given at least 1 choice for one_of")
 
-        validated_value_results = [self.validate(v) for v in values]
+        vvs = []
+        err_msg = []
+        success = True
 
-        for index, vvr in enumerate(validated_value_results):
+        for i, v in enumerate(values):
+            vvr = self.validate(v)
             if vvr.is_err():
-                raise Exception(f"Invalid choice {index}: {vvr.unwrap_err()}")
+                success = False
+                err_msg += prepend_and_tab(
+                    [f"Invalid choice @ index {i}"],
+                    vvr.unwrap_err()
+                )
+            elif success:
+                vvs.append(vvr.unwrap())
 
-        validated_values = [vvr.unwrap() for vvr in validated_value_results]
+        if not success:
+            raise Exception("\n".join(err_msg))
+
         return self.with_default(values[0]).with_extra_checks(
-            check_one_of=lambda v: Ok(None) if v in validated_values else Err(f"Value not one of: {validated_values}")
+            check_one_of=lambda v: Ok(None) if v in vvs else Err(prepend_and_tab(
+                [f"Given value {v} not in list of valid choices"],
+                [str(vv) for vv in vvs]
+            ))
         )
 
-    def one_of_any(self, *values: Any):
-        fcv_results = [fcv_of(v) for v in values]
+    def one_of_any(self, *values: Any) -> FCSchema:
+        fcvs = []
+        err_msg = []
+        success = True
 
-        for index, fcvr in enumerate(fcv_results):
-            if fcvr.is_err():
-                raise Exception(f"Non-FCValue choise {index}: {fcvr.unwrap_err()}")
+        for index, v in enumerate(values):
+            rv = fcv_of(v)
 
-        fcvs = [fcvr.unwrap() for fcvr in fcv_results]
+            if rv.is_err():
+                success = False
+                err_msg += prepend_and_tab(
+                    [f"Non-FCValue choice @ index {index}"],
+                    rv.unwrap_err()
+                )
+            elif success:
+                fcvs.append(rv.unwrap())
+
+        if not success:
+            raise Exception("\n".join(err_msg))
+
         return self.one_of(*fcvs)
 
     @abstractmethod
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         """
         validate takes as input a FCValue and confirms that it abides by implementation 
         specific rules.
@@ -122,11 +148,13 @@ class FCSchema(ABC):
         """
         pass
 
-    def validate_any(self, value: Any) -> Result[FCValue, str]:
-        return do(
-            self.validate(fcv)
-            for fcv in fcv_of(value)
-        )
+    def validate_any(self, value: Any) -> Result[FCValue, list[str]]:
+        fcv_res = fcv_of(value)
+
+        if fcv_res.is_err():
+            return fcv_res
+
+        return self.validate(fcv_res.unwrap())
 
     @abstractmethod
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
@@ -165,11 +193,11 @@ class FCSchemaWrapper(FCSchema):
         self.inner = inner
 
     @override
-    def default(self) -> Result[FCValue, str]:
+    def default(self) -> Result[FCValue, list[str]]:
         return self.inner.default()
 
     @override
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         return self.inner.validate(value)
 
     @override
@@ -217,14 +245,18 @@ class FCSchemaWithDefault(FCSchemaWrapper):
 
         valid_default = schema.validate(default_value)
         if valid_default.is_err():
-            raise Exception(f"Default value failed self validation: {valid_default.unwrap_err()}")
+            err_msg = prepend_and_tab(
+                ["Default value failed self validation"],
+                valid_default.unwrap_err()
+            )
+            raise Exception("\n".join(err_msg))
 
         # Remember, `self.default_value` may contain more than what is provided in 
         # `default_value`. `schema.validate` may populate it with unspecified fields!
         self.default_value = valid_default.unwrap() 
     
     @override
-    def default(self) -> Result[FCValue, str]:
+    def default(self) -> Result[FCValue, list[str]]:
         return Ok(self.default_value)
 
 class FCSchemaWithExtraChecks(FCSchemaWrapper):
@@ -233,7 +265,31 @@ class FCSchemaWithExtraChecks(FCSchemaWrapper):
     the need of creating a whole new class!
     """
 
-    def __init__(self, schema: FCSchema, **checks: Callable[[FCValue], Result[None, str]]):
+    @staticmethod
+    def perform_checks(value: FCValue, **checks: Callable[[FCValue], Result[None, list[str]]]) -> Result[None, list[str]]:
+        """
+        Helper for performing a set of named checks on an FCValue!
+
+        NOTE: Even in error case, this will perform ALL checks. The intention is to give as 
+        detailed an error message as possible!
+        """
+        
+        success = True
+        err_msg = []
+
+        for check_name, check in checks.items():
+            result = check(value)
+
+            if result.is_err():
+                success = False
+                err_msg += prepend_and_tab(
+                    [f"Error @ check \"{check_name}\""],
+                    result.unwrap_err()
+                )
+        
+        return Ok(None) if success else Err(err_msg)
+
+    def __init__(self, schema: FCSchema, **checks: Callable[[FCValue], Result[None, list[str]]]):
         """
         If `schema` has a default value, it will be checked here in this constructor.
         An exception will be raised if the default value does not conform to the 
@@ -249,23 +305,27 @@ class FCSchemaWithExtraChecks(FCSchemaWrapper):
         dv_res = schema.default()
         if dv_res.is_ok(): # We only check default, if the wrapped schema even has a default!
             dv = dv_res.unwrap()
-            for check_name, check in self.checks.items():
-                check_res = check(dv)
-                if check_res.is_err():
-                    raise Exception(f"Default value failed check \"{check_name}\": {check_res.unwrap_err()}")
+            dv_check_res = FCSchemaWithExtraChecks.perform_checks(dv, **checks)
+
+            if dv_check_res.is_err():
+                raise Exception("\n".join(
+                    prepend_and_tab(["Default value failed checks"],
+                        dv_check_res.unwrap_err()
+                    )
+                ))
+
     @override
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         res = super().validate(value)
+        
+        if res.is_err():
+            return res
 
         # Always perform extra checks AFTER initial validation!
-        if res.is_ok():
-            v = res.unwrap()
-            for check_name, check in self.checks.items():
-                check_res = check(v)
-                if check_res.is_err():
-                    return Err(f"Value failed check \"{check_name}\": {check_res.unwrap_err()}")
-
-        return res
+        v = res.unwrap()
+        
+        check_res = FCSchemaWithExtraChecks.perform_checks(v, **self.checks)
+        return check_res.map(lambda n: v)
 
 #
 # Primitive types
@@ -273,9 +333,9 @@ class FCSchemaWithExtraChecks(FCSchemaWrapper):
 
 class FCSchemaBool(FCSchema):
     @override 
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         if not isinstance(value, bool):
-            return Err(f"Given value is not of type bool")
+            return Err([f"Given value is not of type bool"])
 
         return Ok(value)
 
@@ -287,7 +347,7 @@ FCS_BOOL: FCSchema = FCSchemaBool()
 
 class FCSchemaInt(FCSchema):
     @override 
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         match value:
             case int():
                 # Given `value` is a valid FCValue. 
@@ -301,10 +361,10 @@ class FCSchemaInt(FCSchema):
                     # `iv` can be any integer value at this point, must do bounds check!
                     return fcv_int_check_result(iv)
                 except ValueError:
-                    return Err(f"String could not be parsed as hex \"{value}\"")
+                    return Err([f"String could not be parsed as hex \"{value}\""])
 
             case _:
-                return Err(f"Given value cannot be interpreted as an int")
+                return Err([f"Given value cannot be interpreted as an int"])
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
@@ -314,9 +374,9 @@ FCS_INT: FCSchema = FCSchemaInt()
 
 class FCSchemaStr(FCSchema):
     @override 
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         if not isinstance(value, str):
-            return Err(f"Given value is not of type str")
+            return Err([f"Given value is not of type str"])
 
         return Ok(value)
 
@@ -350,28 +410,38 @@ class FCSchemaStrictList(FCSchema):
             raise Exception(f"Invalid element count constraints ({str(min_eles)}, {str(max_eles)})")
 
     @override 
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         if not isinstance(value, list):
-            return Err(f"Given value is not of type list")
+            return Err([f"Given value is not of type list"])
         
         list_value = cast(list[FCValue], value)
         ele_count = len(list_value)
 
         if ele_count < self.min_eles:
-            return Err(f"Given list has too few elements")
+            return Err([f"Given list has too few elements"])
 
         if ele_count > self.max_eles and self.max_eles != 0:
-            return Err(f"Given list has too many elements")
+            return Err([f"Given list has too many elements"])
         
         new_value = []
+        err_msg = []
+        success = True
+
         for i in range(ele_count):
             child_res = self.ele_schema.validate(list_value[i])
             if child_res.is_err():
-                return child_res.map_err(lambda msg: f"Error @ index {str(i)}: {msg}")
+                success = False
+                err_msg += prepend_and_tab(
+                    [f"StrictList Error @ index {str(i)}"],
+                    child_res.unwrap_err()
+                )
 
-            new_value.append(child_res.unwrap())
+            # We only add to new_value if there's a chance it will be returned.
+            # If success if False, we have already hit an error, and this is impossible.
+            elif success: 
+                new_value.append(child_res.unwrap())
 
-        return Ok(new_value)
+        return Ok(new_value) if success else Err(err_msg)
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
@@ -392,20 +462,28 @@ class FCSchemaStrictDict(FCSchema):
         self.ele_schema = ele_schema
 
     @override 
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         if not isinstance(value, dict):
-            return Err("Given value is not of type dict")
+            return Err(["Given value is not of type dict"])
 
         dict_value = cast(dict[str, FCValue], value)
 
         new_value = {}
+        err_msg = []
+        success = True
+
         for k, v in dict_value.items():
             new_v = self.ele_schema.validate(v)
             if new_v.is_err():
-                return new_v.map_err(lambda msg: f"Error @ key \"{k}\": {msg}")
-            new_value[k] = new_v.unwrap()
+                success = False
+                err_msg += prepend_and_tab(
+                    [f"StrictDict Error @ key \"{k}\""],
+                    new_v.unwrap_err()
+                )
+            elif success:
+                new_value[k] = new_v.unwrap()
 
-        return Ok(new_value)
+        return Ok(new_value) if success else Err(err_msg)
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
@@ -419,6 +497,124 @@ class FCSchemaStrictDict(FCSchema):
 
 
 class FCSchemaStruct(FCSchema):
+
+    @staticmethod
+    def _fill_in_list(fvs: list[FCValue], fields: list[tuple[str, FCSchema]]) -> Result[dict[str, FCValue], list[str]]:
+        """
+        Helper method, given a list of value and a list of fields which should exist, 
+        validate given fields and fill in missing fields, and return as a dictionary!
+
+        NOTE: this function is private as it does not validate that field names in 'fields' are
+        valid!
+        """
+
+        if len(fvs) > len(fields):
+            return Err([f"Given {len(fvs)} fields, but expected <= {len(fields)}"])
+
+        new_value = {}
+        err_msg = []
+        success = True
+
+        for i, given_value in enumerate(fvs):
+            field_name, field_schema = fields[i]
+            rv = field_schema.validate(given_value) 
+            if rv.is_err():
+                success = False
+                err_msg += prepend_and_tab(
+                    [f"Error validating struct field \"{field_name}\""],
+                    rv.unwrap_err()
+                )
+            elif success:
+                new_value[field_name] = rv.unwrap()
+
+        # Ok, now try to add defaults of fields not given
+        for i in range(len(fvs), len(fields)):
+            field_name, field_schema = fields[i]
+            rv = field_schema.default()
+            if rv.is_err():
+                success = False
+                err_msg += [f"Required field not specified \"{field_name}\""]
+            elif success: 
+                new_value[field_name] = rv.unwrap()
+
+        return Ok(new_value) if success else Err(err_msg)
+
+
+    @staticmethod
+    def _fill_in_dict(fvs: dict[str, FCValue], fields: dict[str, FCSchema]) -> Result[dict[str, FCValue], list[str]]:
+        """
+        Helper method, given a dictionary of values, and a dictionary of fields validate given
+        fields and filli n missing fields.
+
+        (Realize this doesn't need a list of fields, as order is not needed in this case)
+        
+        Private as field name regex match is not applied to `fields`.
+
+        DOES NOT modify `fvs`, returns a new dictionary!
+        """
+
+        new_value = {}
+        err_msg = []
+        success = True
+
+        for field_name, field_value in fvs.items():
+            if field_name not in fields:
+                success = False
+                err_msg += [f"Unknown field provided \"{field_name}\""]
+            else:
+                field_schema = fields[field_name]
+                rv = field_schema.validate(field_value)
+                if rv.is_err():
+                    success = False
+                    err_msg += prepend_and_tab(
+                        [f"Error validating struct field \"{field_name}\""],
+                        rv.unwrap_err()
+                    )
+                elif success:
+                    new_value[field_name] = rv.unwrap()
+
+        # Ok, now for unprovided fields
+        for field_name, field_schema in fields.items():
+            if field_name not in fvs:
+                rv = field_schema.default()
+                if rv.is_err():
+                    success = False
+                    err_msg += [f"Required field not specified \"{field_name}\""]
+                elif success:
+                    new_value[field_name] = rv.unwrap()
+
+        return Ok(new_value) if success else Err(err_msg)
+
+    @staticmethod
+    def _append_derived(fvs: dict[str, FCValue], derived: dict[str, tuple[FCSchema, Callable[[FCValue], FCValue]]]) -> dict[str, FCValue]:
+        """
+        Helper for generating and adding derived fields to a dictionary!
+
+        This DOES NOT modify fvs!
+        """
+        new_derived_values = {}
+        err_msg = []
+        success = True
+
+        for df_name, (df_schema, df_func) in derived.items():
+            rdv = df_schema.validate(df_func(fvs))
+
+            if rdv.is_err():
+                success = False
+                err_msg += prepend_and_tab(
+                    [f"Error creating derived field \"{df_name}\""],
+                    rdv.unwrap_err()
+                )
+            elif success:
+                new_derived_values[df_name] = rdv.unwrap()
+        
+        # If a derived field fails its own schema, this is the fault of the schema creator!
+        # NOT THE USER!
+        if not success:
+            raise Exception("\n".join(err_msg))
+
+        return fvs | new_derived_values
+
     def __init__(self, fields: list[tuple[str, FCSchema]], 
                  **derived: tuple[FCSchema, Callable[[FCValue], FCValue]]):
         """
@@ -439,14 +635,12 @@ class FCSchemaStruct(FCSchema):
         if len(fields) == 0:
             raise Exception("An FCSchemaStruct cannot be empty!")
         
-        self.field_order = [field[0] for field in fields]
+        # We'll store fields in two forms just for convenience.
+        self.fields_list = fields[:]
         self.fields_dict: dict[str, FCSchema] = {}
-        self.derived_dict = derived
 
-        # We will try to generate a single default value here!
-        self.default_result: Result[dict[str, FCValue], str] = Ok({})
-
-        for (field, schema) in fields:
+        # First confirm all field names are valid! (Creating fields dict while we go)
+        for (field, schema) in self.fields_list:
             if not FC_ID_PATTERN.fullmatch(field):
                 raise Exception(f"FCSchemaStruct field name is invalid \"{field}\"")
             
@@ -455,16 +649,7 @@ class FCSchemaStruct(FCSchema):
 
             self.fields_dict[field] = schema
 
-            if self.default_result.is_ok():
-                field_dv = schema.default()
-                if field_dv.is_ok():
-                    self.default_result.unwrap()[field] = field_dv.unwrap()
-                else:
-                    # NOTE: That is totally ok for our struct not to have a default value!
-                    self.default_result = Err(f"Struct has no default value, (\"{field}\" is required)")
-
-        # For derived fields, we need to both confirm valid field names, and also, potentially
-        # add to the default value!
+        # For derived fields, we must confirm names are valid AND no repeat names!
         for field, (schema, func) in derived.items():
             # This may be redundant because we are using kwargs, but whatever.
             if not FC_ID_PATTERN.fullmatch(field):
@@ -473,137 +658,38 @@ class FCSchemaStruct(FCSchema):
             if field in self.fields_dict:
                 raise Exception(f"FCSchemaStruct derived field name already exists \"{field}\"")
 
-        # NOTE: For adding to the default value, we don't actually use the derived schema default
-        # values. We instead simulate the validation process on the currently constructed default.
-        # That is, we pass the default into the given lambda for each derived field!
-        if self.default_result.is_ok():
-            dv = self.default_result.unwrap()
+        self.derived_dict = derived
 
-            derived_fvs = {}
-            for field, (schema, func) in derived.items():
-                dfv_res = schema.validate(func(dv))
+        # Ok, finally, let's attempt to create a default value. (It is ok if this fails)
+        # To create the default, we ask for the default value from all explicit field schema.
+        # If all those schema have defaults, then the resulting value is passed to the derived
+        # value functions! 
+        dvr = FCSchemaStruct._fill_in_dict({}, self.fields_dict)
+        if dvr.is_ok():
+            dvr = Ok(FCSchemaStruct._append_derived(dvr.unwrap(), self.derived_dict))
 
-                # If a derived value is failed to be created for the given default,
-                # this is an error with the schema, and thus warrants an exception!
-                if not dfv_res.is_ok():
-                    raise Exception(f"FCSchemaStruct has bad derived field lambda \"{field}\"")
-
-                derived_fvs[field] = dfv_res.unwrap()
-
-            # Don't modify the actual default value until the end!
-            dv |= derived_fvs
+        self.default_result = dvr
 
     @override
-    def default(self) -> Result[FCValue, str]:
+    def default(self) -> Result[FCValue, list[str]]:
         return self.default_result 
 
-    def _validate_list(self, value: list[FCValue]) -> Result[dict[str, FCValue], str]:
-        """
-        Here given values must be in the same order as `self.fields`.
-        If fields are missing at the end, they'll be attempted to be filled in with defaults.
-
-        DOES NOT ADD DERIVED FIELDS
-        """
-        if len(value) > len(self.field_order):
-            return Err(f"Too many fields provided: {len(value)} (expected={len(self.field_order)})")
- 
-        new_value = {}
-        for i in range(len(value)):
-            field_name = self.field_order[i]
-            schema = self.fields_dict[field_name]
-            field_res = schema.validate(value[i])
-
-            if field_res.is_err():
-                return Err(f"Failure @ field \"{field_name}\": {field_res.unwrap_err()}")
-
-            new_value[field_name] = field_res.unwrap()
-
-        for i in range(len(value), len(self.field_order)):
-            field_name = self.field_order[i]
-            schema = self.fields_dict[field_name]
-            dv_res = schema.default()
-
-            if dv_res.is_err():
-                return Err(f"Field {field_name} must be specified")
-
-            new_value[field_name] = dv_res.unwrap()
-
-        return Ok(new_value)
-
-    def _validate_dict(self, value: dict[str, FCValue]) -> Result[dict[str, FCValue], str]:
-        """
-        Here we just make sure all requred values are present and valid.
-        Missing fields being populated with defaults.
-
-        DOES NOT ADD DERIVED FIELDS
-        """
-        new_value = {}
-        for name, field_value in value.items():
-            if name not in self.fields_dict:
-                return Err(f"Field {name} is unknown")
-            field_res = self.fields_dict[name].validate(field_value)
-
-            if field_res.is_err():
-                return Err(f"Failure @ field \"{name}\": {field_res.unwrap_err()}")
-
-            new_value[name] = field_res.unwrap()
-
-        # Now for defaults.
-        for name, schema in self.fields_dict.items():
-            if name not in new_value:
-                dv_res = schema.default()
-
-                if dv_res.is_err():
-                    return Err(f"Failure @ field \"{name}\": {dv_res.unwrap_err()}")
-
-                new_value[name] = dv_res.unwrap()
-
-        return Ok(new_value)
-
     @override 
-    def validate(self, value: FCValue) -> Result[FCValue, str]:
+    def validate(self, value: FCValue) -> Result[FCValue, list[str]]:
         """
         While both list or dict FCValues are accepted by this function, only a dict is ever 
         returned!
         """
-        valid_res = None
+        valid_res: Result[dict[str, FCValue], list[str]] = Ok({})
         match value:
             case list():
-                valid_res = self._validate_list(cast(list[FCValue], value))
+                valid_res = FCSchemaStruct._fill_in_list(value, self.fields_list)
             case dict():
-                valid_res = self._validate_dict(cast(dict[str, FCValue], value))
+                valid_res = FCSchemaStruct._fill_in_dict(value, self.fields_dict)
             case _:
-                return Err("Struct must either be specified as a list or dict")
+                return Err(["Struct must either be specified as a list or dict"])
 
-        if valid_res.is_err():
-            return valid_res
-
-        valid_value = valid_res.unwrap()
-
-        # Now for derived fields!
-        derived_values: dict[str, FCValue] = {}
-        for field, (schema, func) in self.derived_dict.items():
-            dfv_res = schema.validate(func(valid_value))
-
-            # NOTE: There was a time where I maintained the condition that if initial fields
-            # are valid, derived fields must also be valid. This if statement actually used to
-            # to raise an exception! The idea being that the schema designer should prevent
-            # the derived value from ever failing validation!
-            #
-            # In theory this was cool, but ultimately lead to kinda confusing extras checks needed
-            # on the initial fields to guarantee valid derived fields.
-            if not dfv_res.is_ok():
-                return dfv_res.map_err(lambda msg: f"Error @ derived field \"{field}\": {msg}")
-
-            derived_values[field] = dfv_res.unwrap()
-
-        # NOTE: It is ok to modify this value as I personally know that _validate_list and 
-        # _validate_dict construct entirely new dictionaries during validation.
-        # It is impossible the `valid_value` dict to have any references outside of this
-        # very function!
-        valid_value |= derived_values
-
-        return Ok(valid_value)
+        return valid_res.map(lambda fvs: FCSchemaStruct._append_derived(fvs, self.derived_dict))
 
     @override
     def translate(self, prefix: str, value: FCValue, translator: FCTranslator) -> list[str]:
