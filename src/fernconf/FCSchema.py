@@ -533,7 +533,7 @@ class FCSchemaStruct(FCSchema):
             rv = field_schema.default()
             if rv.is_err():
                 success = False
-                err_msg += [f"Require field not specified \"{field_name}\""]
+                err_msg += [f"Required field not specified \"{field_name}\""]
             elif success: 
                 new_value[field_name] = rv.unwrap()
 
