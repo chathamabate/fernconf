@@ -35,12 +35,36 @@ def fcc_or(**checks: FCCheck) -> FCCheck:
     def _check(fcv: FCValue) -> Result[None, list[str]]:
         for check_name, check in checks.items():
             cr = check(fcv)
-            if cr.is_err():
-                return Err(prepend_and_tab(
-                    ["Or check must pass at least one of the following"],
-                    list(checks.keys())
-                ))
-        return Ok(None)
+            if cr.is_ok():
+                return Ok(None)
+
+        return Err(prepend_and_tab(
+            ["Or check must pass at least one of the following"],
+            list(checks.keys())
+        ))
 
     return _check
 
+def fcc_xor(**checks: FCCheck) -> FCCheck:
+    def _check(fcv: FCValue) -> Result[None, list[str]]:
+        pass_names = []
+        for check_name, check in checks.items():
+            cr = check(fcv)
+            if cr.is_ok():
+                pass_names.append(check_name)
+
+        if len(pass_names) == 0:
+            return Err(prepend_and_tab(
+                ["Xor check must pass exacly one of the following checks"],
+                list(checks.keys())
+            ))
+
+        if len(pass_names) > 1:
+            return Err(prepend_and_tab(
+                ["Xor check has more than one passing check"],
+                pass_names
+            ))
+
+        return Ok(None)
+
+    return _check
