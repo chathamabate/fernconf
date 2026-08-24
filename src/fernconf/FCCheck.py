@@ -94,3 +94,15 @@ def fcc_if(cond: FCCheck, conseq: FCCheck) -> FCCheck:
         return Ok(None)
 
     return _check
+
+def fcc_b(p_str: str) -> FCCheck:
+    """
+    This check is used when it is GUARANTEED that a boolean FCValue exists in the checked value
+    at path `p_str`. It succeeds when the boolean is True and fails when it is False!
+    """
+    def _check(fcv: FCValue) -> Result[None, list[str]]:
+        return Ok(None) if 
+            fcv_getp_bool(fcv, p_str) else 
+            Err([f"Path \"{p_str}\" evaluated to False"])
+
+    return _check
