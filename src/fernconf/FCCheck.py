@@ -68,3 +68,29 @@ def fcc_xor(**checks: FCCheck) -> FCCheck:
         return Ok(None)
 
     return _check
+
+def fcc_not(check: FCCheck) -> FCCheck:
+    def _check(fcv: FCValue) -> Result[None, list[str]]:
+        cr = check(fcv)
+        if cr.is_ok():
+            return Err(["Not expression succeeded unexplectedly"])
+
+        return Ok(None)
+
+    return _check
+
+def fcc_if(cond: FCCheck, conseq: FCCheck) -> FCCheck:
+    def _check(fcv: FCValue) -> Result[None, list[str]]:
+        cond_r = cond(fcv)
+        if cond_r.is_err():
+            return Ok(None)
+
+        conseq_r = conseq(fcv)
+        if conseq_r.is_err():
+            return Err(prepend_and_tab(
+                ["Consequence failed when condition succeeded"],
+                conseq_r.unwrap_err()
+            ))
+        return Ok(None)
+
+    return _check
