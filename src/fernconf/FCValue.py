@@ -163,6 +163,9 @@ def fcv_getp(val: FCValue, p_str: str) -> FCValue:
 
     return fcv_get(val, *p)
 
+def fcv_getp_int(val: FCValue, p_str: str) -> int:
+    return cast(int, fcv_getp(val, p_str))
+
 def fcv_getp_bool(val: FCValue, p_str: str) -> bool:
     return cast(bool, fcv_getp(val, p_str))
 
