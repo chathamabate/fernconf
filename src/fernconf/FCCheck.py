@@ -37,6 +37,9 @@ def fcc_not(check: FCCheck) -> FCCheck:
 
 
 def fcc_and(*checks: FCCheck) -> FCCheck:
+    if len(checks) == 0:
+        raise Exception("fcc_and requires at least one condition be given")
+
     def _check(fcv: FCValue) -> Result[None, list[str]]:
         err_msg = []
         success = True
@@ -53,6 +56,9 @@ def fcc_and(*checks: FCCheck) -> FCCheck:
     return _check
 
 def fcc_or(*checks: FCCheck) -> FCCheck:
+    if len(checks) == 0:
+        raise Exception("fcc_or requires at least one condition be given")
+
     def _check(fcv: FCValue) -> Result[None, list[str]]:
         for check in checks:
             cr = check(fcv)
@@ -64,6 +70,9 @@ def fcc_or(*checks: FCCheck) -> FCCheck:
     return _check
 
 def fcc_xor(*checks: FCCheck) -> FCCheck:
+    if len(checks) == 0:
+        raise Exception("fcc_xor requires at least one condition be given")
+
     def _check(fcv: FCValue) -> Result[None, list[str]]:
         pass_found = False
         for check in checks:
