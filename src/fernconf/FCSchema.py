@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from fernconf.FCValue import *
-from fernconf.FCTranslator import FCTranslator
+from fernconf.FCCheck import *
+from fernconf.FCTranslator import *
 
 from abc import ABC, abstractmethod
 from typing import Any, override, cast, Callable
@@ -45,7 +46,7 @@ class FCSchema(ABC):
 
         return self.with_default(default_fcv.unwrap())
 
-    def with_extra_checks(self, **checks: Callable[[FCValue], Result[None, list[str]]]) -> FCSchema:
+    def with_extra_checks(self, **checks: FCCheck) -> FCSchema:
         return FCSchemaWithExtraChecks(self, **checks)
 
     def const(self, value: FCValue) -> FCSchema:
@@ -266,7 +267,7 @@ class FCSchemaWithExtraChecks(FCSchemaWrapper):
     """
 
     @staticmethod
-    def perform_checks(value: FCValue, **checks: Callable[[FCValue], Result[None, list[str]]]) -> Result[None, list[str]]:
+    def perform_checks(value: FCValue, **checks: FCCheck) -> Result[None, list[str]]:
         """
         Helper for performing a set of named checks on an FCValue!
 
@@ -289,7 +290,7 @@ class FCSchemaWithExtraChecks(FCSchemaWrapper):
         
         return Ok(None) if success else Err(err_msg)
 
-    def __init__(self, schema: FCSchema, **checks: Callable[[FCValue], Result[None, list[str]]]):
+    def __init__(self, schema: FCSchema, **checks: FCCheck):
         """
         If `schema` has a default value, it will be checked here in this constructor.
         An exception will be raised if the default value does not conform to the 
